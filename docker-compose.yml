@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  multirole-ai:
+    build: .
+    ports:
+      - "8890:8890"
+    depends_on:
+      - redis
+    environment:
+      MULTIROLE_REDIS_URL: redis://redis:6379/0
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
