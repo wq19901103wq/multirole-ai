@@ -71,11 +71,12 @@ multirole-ai/
 │   └── server.py             # Flask HTTP 统一入口
 ├── examples/
 │   └── run_debate.py         # 命令行示例
-├── tests/                    # 测试套件（25 项全通过）
+├── tests/                    # 测试套件（27 项全通过）
 │   ├── conftest.py
 │   ├── test_adapters.py
 │   ├── test_api.py
 │   ├── test_feishu_api.py
+│   ├── test_websocket.py
 │   ├── test_drift_guard.py
 │   ├── test_harness_engine.py
 │   ├── test_model_router.py
@@ -83,6 +84,11 @@ multirole-ai/
 │   └── test_redis_integration.py
 ├── benchmarks/               # 性能基准测试
 │   └── benchmark_engine.py
+├── examples/                 # 示例脚本
+│   ├── run_debate.py
+│   └── run_real_debate.py   # 真实 LLM 端到端演示
+├── .github/workflows/        # CI/CD
+│   └── ci.yml
 ├── Dockerfile                # Docker 构建
 ├── docker-compose.yml        # 一键部署（含 Redis）
 ├── .dockerignore
@@ -104,7 +110,11 @@ multirole-ai/
 | **Redis 集成** | ✅ 完成 | `RedisSessionStore` + 真实 Redis 集成测试（5 项） |
 | **OpenClaw 技能** | ✅ 完成 | 已注册为 OpenClaw 技能 `multirole-ai`，可直接调用 |
 | **飞书 API 端点** | ✅ 完成 | `/v1/feishu/discuss` + 独立 `feishu_server.py` 回调服务 |
-| **测试覆盖** | ✅ 25/25 通过 | `pytest -q` 全绿 |
+| **Swagger 文档** | ✅ 完成 | `/apidocs/` 自动生成 OpenAPI 文档 |
+| **WebSocket 流式** | ✅ 完成 | `/v1/discuss/stream` 实时逐条推送讨论结果 |
+| **CI/CD** | ✅ 完成 | GitHub Actions 自动跑测试 + Redis |
+| **真实 LLM 演示** | ✅ 完成 | `examples/run_real_debate.py` 端到端演示 |
+| **测试覆盖** | ✅ 27/27 通过 | `pytest -q` 全绿 |
 
 ## 核心创新：DriftGuard 防漂移机制
 
@@ -261,6 +271,49 @@ python benchmarks/benchmark_engine.py
 ```
 
 该脚本会测试 `HarnessEngine.run()` 在不同 `max_rounds` 和 `force_manual` 配置下的平均延迟，结果输出到 `benchmarks/results.json`。
+
+## Swagger API 文档
+
+启动服务后访问：
+
+- Swagger UI: http://localhost:8890/apidocs/
+- Swagger JSON: http://localhost:8890/apispec_1.json
+
+所有接口均带有 OpenAPI 描述，支持在线调试。
+
+## WebSocket 实时流式讨论
+
+提供 `ws://localhost:8890/v1/discuss/stream`，客户端发送 JSON 后即可逐条接收每个 Agent 的发言：
+
+```javascript
+const ws = new WebSocket('ws://localhost:8890/v1/discuss/stream');
+ws.onopen = () => ws.send(JSON.stringify({message: "话题", max_rounds: 2}));
+ws.onmessage = (e) => console.log(JSON.parse(e.data));
+```
+
+消息类型：
+- `status` — 讨论开始
+- `event` — 单条 Agent/Moderator 发言
+- `turn_end` — 本轮结束
+- `done` — 全部完成
+- `error` — 错误信息
+
+## CI/CD
+
+已配置 GitHub Actions (`.github/workflows/ci.yml`)：
+- 每次 `push` / `pull_request` 到 `main` 时自动触发
+- 安装并启动 Redis，安装依赖
+- 运行 `pytest -q`
+- 运行 Python 语法检查
+
+## 真实 LLM 端到端演示
+
+```bash
+export KIMI_API_KEY="your-api-key"
+python examples/run_real_debate.py
+```
+
+该脚本会直接调用 Kimi API，运行一场真实的多代理辩论，并格式化输出每位参与者的发言和相关性评分。
 
 ## 使用 AutoGen
 

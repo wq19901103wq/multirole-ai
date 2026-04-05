@@ -41,14 +41,20 @@ class HarnessGroupChat:
         topic_text: str,
         prev_summary: Optional[str] = None,
         force_manual: bool = False,
+        on_message=None,
     ) -> List[Message]:
         if self._autogen_available and not force_manual:
-            return self._run_with_autogen(
+            # AutoGen 模式不支持逐消息回调，先跑完再批量回调（如有需要）
+            msgs = self._run_with_autogen(
                 round_num, participants, moderator_spec, topic_text, prev_summary
             )
+            if on_message:
+                for m in msgs:
+                    on_message(m)
+            return msgs
         else:
             return self._run_manual(
-                round_num, participants, moderator_spec, topic_text, prev_summary
+                round_num, participants, moderator_spec, topic_text, prev_summary, on_message=on_message
             )
 
     def _build_context(self, round_num: int, topic_text: str, prev_summary: Optional[str]) -> str:
@@ -65,6 +71,7 @@ class HarnessGroupChat:
         moderator_spec: Any,
         topic_text: str,
         prev_summary: Optional[str],
+        on_message=None,
     ) -> List[Message]:
         messages: List[Message] = []
         context = self._build_context(round_num, topic_text, prev_summary)
@@ -78,23 +85,29 @@ class HarnessGroupChat:
                 temperature=0.5,
             )
             relevance = self.topic_anchor.extract_relevance(raw)
-            messages.append(Message(
+            msg = Message(
                 role=Role.ASSISTANT,
                 content=raw,
                 sender_id=spec.agent_id,
                 sender_name=spec.name,
                 metadata={"relevance_score": relevance, "type": "response", "round": round_num},
-            ))
+            )
+            messages.append(msg)
+            if on_message:
+                on_message(msg)
 
         ck = self.checkpoint.check(self.topic_anchor.topic, messages)
         mod_content = ck["summary"]
-        messages.append(Message(
+        mod_msg = Message(
             role=Role.MODERATOR,
             content=mod_content,
             sender_id=moderator_spec.agent_id,
             sender_name=moderator_spec.name,
             metadata={"type": "moderation", "drift_detected": ck["drift_detected"], "round": round_num},
-        ))
+        )
+        messages.append(mod_msg)
+        if on_message:
+            on_message(mod_msg)
         return messages
 
     def _run_with_autogen(

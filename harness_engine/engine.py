@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Callable
 from core.topic import Topic
 from core.event import TurnResult
 from core.message import Message, Role
@@ -39,6 +39,20 @@ class HarnessEngine:
         max_rounds: int = 2,
         force_manual: bool = False,
     ) -> List[TurnResult]:
+        return list(self.run_stream(topic, personas, max_rounds, force_manual))
+
+    def run_stream(
+        self,
+        topic: Topic,
+        personas: Optional[List[DebaterAgent]] = None,
+        max_rounds: int = 2,
+        force_manual: bool = False,
+        on_message: Optional[Callable[[Message], None]] = None,
+    ):
+        """
+        生成器版本：逐轮 yield TurnResult，同时支持逐消息回调 on_message。
+        适合 WebSocket 实时推送场景。
+        """
         personas = personas or self.DEFAULT_PERSONAS
         moderator = ModeratorAgent()
 
@@ -47,7 +61,6 @@ class HarnessEngine:
         truncator = ContextTruncator(max_history_turns=2)
         group_chat = HarnessGroupChat(self.router, anchor, checkpoint)
 
-        results: List[TurnResult] = []
         prev_summary: Optional[str] = None
 
         for round_num in range(1, max_rounds + 1):
@@ -58,6 +71,7 @@ class HarnessEngine:
                 topic_text=topic.text,
                 prev_summary=prev_summary,
                 force_manual=force_manual,
+                on_message=on_message,
             )
 
             # 解析 moderator 的结果
@@ -72,6 +86,4 @@ class HarnessEngine:
                 drift_report=mod_msg.content if drift_detected else "",
                 metadata={"round": round_num},
             )
-            results.append(result)
-
-        return results
+            yield result

@@ -3,11 +3,21 @@
 统一 API 入口。
 前端（Web / 飞书 / 微信）统一调用 /v1/discuss，
 由 WebAdapter 解析请求并渲染响应。
-未来可扩展 /v1/feishu/discuss、/v1/wechat/discuss 等路由。
 """
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
+import json
+
+try:
+    from flasgger import Swagger
+except ImportError:
+    Swagger = None
+
+try:
+    from flask_sock import Sock
+except ImportError:
+    Sock = None
 
 # 把项目根目录加入 PYTHONPATH
 import sys
@@ -24,6 +34,22 @@ from adapters.feishu import FeishuAdapter
 
 app = Flask(__name__)
 CORS(app)
+
+if Sock is not None:
+    sock = Sock(app)
+else:
+    sock = None
+
+if Swagger is not None:
+    Swagger(app, template={
+        "swagger": "2.0",
+        "info": {
+            "title": "Multirole AI API",
+            "description": "Multi-agent AI discussion system with drift guard",
+            "version": "1.0.0",
+        },
+        "basePath": "/",
+    })
 
 # ========== 初始化各层 ==========
 # 1. 注册 provider
@@ -55,21 +81,55 @@ web_adapter = WebAdapter()
 feishu_adapter = FeishuAdapter()
 
 
+def _msg_to_event(msg, round_num):
+    """把内部 Message 对象转成前端事件 dict。"""
+    return {
+        "event_type": "moderation" if msg.is_moderation else "message",
+        "role_name": msg.sender_name or msg.sender_id or "Agent",
+        "content": msg.content,
+        "relevance": msg.metadata.get("relevance_score"),
+        "round": round_num,
+        "emoji": msg.metadata.get("emoji", "🤖"),
+        "color": msg.metadata.get("color", "#667eea"),
+    }
+
+
 @app.route('/v1/discuss', methods=['POST'])
 def discuss():
     """
-    统一讨论接口。
-    Request:
-        {
-            "message": "用户问题",
-            "session_id": "可选，默认 default",
-            "max_rounds": 2
-        }
-    Response:
-        {
-            "events": [ ... ],
-            "session_id": "..."
-        }
+    统一讨论接口
+    ---
+    tags:
+      - Discussion
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "人工智能会取代程序员吗？"
+            session_id:
+              type: string
+              example: "default"
+            max_rounds:
+              type: integer
+              example: 2
+            force_manual:
+              type: boolean
+              example: false
+    responses:
+      200:
+        description: 讨论结果
+        schema:
+          type: object
+          properties:
+            events:
+              type: array
+            session_id:
+              type: string
     """
     data = request.json or {}
     user_message = web_adapter.extract_user_message(data)
@@ -97,8 +157,19 @@ def discuss():
 @app.route('/v1/feishu/discuss', methods=['POST'])
 def feishu_discuss():
     """
-    飞书机器人统一讨论接口。
-    接收飞书事件回调格式，返回飞书交互卡片格式。
+    飞书机器人统一讨论接口
+    ---
+    tags:
+      - Discussion
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+    responses:
+      200:
+        description: 飞书交互卡片
     """
     data = request.json or {}
     user_message = feishu_adapter.extract_user_message(data)
@@ -109,7 +180,6 @@ def feishu_discuss():
     if not user_message:
         return jsonify({"error": "message is required"}), 400
 
-    # 把默认 provider 换成 mock（测试环境）或保持现有 provider
     events = session_manager.run_discussion(
         session_id=session_id,
         user_message=user_message,
@@ -121,12 +191,79 @@ def feishu_discuss():
     return jsonify(rendered)
 
 
+def discuss_stream(ws):
+    """
+    WebSocket 实时流式讨论接口。
+    客户端发送 JSON：{"message": "...", "session_id": "...", "max_rounds": 2}
+    服务端逐条推送每个 Agent 的发言和 Moderator 总结。
+    """
+    try:
+        raw = ws.receive(timeout=5)
+        if not raw:
+            ws.send(json.dumps({"error": "empty request"}))
+            return
+        data = json.loads(raw)
+    except Exception as e:
+        ws.send(json.dumps({"error": f"invalid json: {e}"}))
+        return
+
+    user_message = web_adapter.extract_user_message(data)
+    session_id = web_adapter.extract_session_id(data)
+    max_rounds = data.get("max_rounds", 2)
+
+    if not user_message:
+        ws.send(json.dumps({"error": "message is required"}))
+        return
+
+    ws.send(json.dumps({"type": "status", "text": "讨论开始"}))
+
+    # 这里直接用 user_message 作为 topic text
+    from core.topic import Topic
+    topic_obj = Topic(text=user_message)
+
+    def on_message(msg):
+        evt = _msg_to_event(msg, msg.metadata.get("round", 0))
+        ws.send(json.dumps({"type": "event", "payload": evt}))
+
+    try:
+        for turn in session_manager.engine.run_stream(
+            topic=topic_obj,
+            max_rounds=max_rounds,
+            force_manual=True,
+            on_message=on_message,
+        ):
+            ws.send(json.dumps({"type": "turn_end", "round": turn.metadata.get("round", 0)}))
+
+        ws.send(json.dumps({"type": "done", "session_id": session_id}))
+    except Exception as e:
+        ws.send(json.dumps({"type": "error", "message": str(e)}))
+
+
+if sock is not None:
+    sock.route('/v1/discuss/stream')(discuss_stream)
+
+
 @app.route('/health', methods=['GET'])
 def health():
+    """
+    健康检查
+    ---
+    tags:
+      - System
+    responses:
+      200:
+        description: 服务状态
+    """
     return jsonify({
         "status": "ok",
         "autogen_installed": engine.router.default_provider is not None,
     })
+
+
+@app.route('/swagger-ui')
+def swagger_ui():
+    """兼容旧版 Swagger UI 重定向"""
+    return jsonify({"swagger_url": "/apidocs/", "flasgger": True})
 
 
 # ========== Web 演示页面 ==========
@@ -156,7 +293,10 @@ HTML_DEMO = """
         .input-area textarea { flex: 1; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; resize: none; font-size: 14px; min-height: 60px; }
         .btn { padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-secondary { background: #e0e0e0; color: #333; }
         .divider { margin: 10px 0; text-align: center; color: #999; font-size: 12px; }
+        .links { text-align: center; padding: 10px; font-size: 12px; }
+        .links a { color: #667eea; margin: 0 10px; }
     </style>
 </head>
 <body>
@@ -174,11 +314,16 @@ HTML_DEMO = """
                 <li><b>DriftGuard</b>：TopicAnchor + ModeratorCheckpoint + ContextTruncator</li>
                 <li><b>Model Router</b>：统一路由 Kimi / OpenAI / Claude 等模型</li>
             </ul>
+            <div class="links">
+                <a href="/apidocs/" target="_blank">📘 Swagger API 文档</a>
+                <a href="/swagger-ui" target="_blank">🔍 Swagger UI</a>
+            </div>
         </div>
     </div>
     <div class="input-area">
         <textarea id="userInput" rows="2" placeholder="输入问题，发起多代理讨论..."></textarea>
         <button class="btn" id="sendBtn" onclick="startDiscussion()">发起讨论</button>
+        <button class="btn btn-secondary" id="streamBtn" onclick="startStreamDiscussion()">实时流式讨论</button>
     </div>
     <script>
         async function startDiscussion() {
@@ -208,20 +353,76 @@ HTML_DEMO = """
                     d.className = 'divider'; d.textContent = `--- 第 ${currentRound} 轮 ${evt.event_type==='moderation'?'· 主持人对齐':''} ---`;
                     roundDiv.appendChild(d);
                 }
-                const isMod = evt.event_type === 'moderation';
-                const meta = !isMod && evt.relevance !== undefined
-                    ? `<span class="badge ${evt.relevance < 8 ? 'badge-drift' : 'badge-good'}">相关性 ${evt.relevance}/10</span>` : '';
-                const div = document.createElement('div'); div.className = 'message';
-                div.innerHTML = `
-                    <div class="message-header">
-                        <div class="avatar" style="background:${evt.color}20;color:${evt.color};">${evt.emoji}</div>
-                        <span class="role-name" style="color:${evt.color};">${evt.role_name}</span>${meta}
-                    </div>
-                    <div class="message-content ${isMod?'moderator-content':''}" style="border-color:${evt.color};">${evt.content}</div>
-                `;
-                roundDiv.appendChild(div);
+                appendEvent(roundDiv, evt);
             });
             btn.disabled = false; btn.textContent = '发起讨论'; container.scrollTop = container.scrollHeight;
+        }
+
+        function appendEvent(container, evt) {
+            const isMod = evt.event_type === 'moderation';
+            const meta = !isMod && evt.relevance !== undefined
+                ? `<span class="badge ${evt.relevance < 8 ? 'badge-drift' : 'badge-good'}">相关性 ${evt.relevance}/10</span>` : '';
+            const div = document.createElement('div'); div.className = 'message';
+            div.innerHTML = `
+                <div class="message-header">
+                    <div class="avatar" style="background:${evt.color}20;color:${evt.color};">${evt.emoji}</div>
+                    <span class="role-name" style="color:${evt.color};">${evt.role_name}</span>${meta}
+                </div>
+                <div class="message-content ${isMod?'moderator-content':''}" style="border-color:${evt.color};">${evt.content}</div>
+            `;
+            container.appendChild(div);
+        }
+
+        function startStreamDiscussion() {
+            const input = document.getElementById('userInput');
+            const btn = document.getElementById('streamBtn');
+            const msg = input.value.trim();
+            if (!msg) return;
+            btn.disabled = true; btn.textContent = '流式讨论中...'; input.value = '';
+            const container = document.getElementById('chatContainer');
+            const roundDiv = document.createElement('div');
+            roundDiv.className = 'discussion-round';
+            roundDiv.innerHTML = `<div class="round-title">🗣️ ${msg.substring(0,30)}... (WebSocket 实时)</div>`;
+            container.appendChild(roundDiv); container.scrollTop = container.scrollHeight;
+
+            const ws = new WebSocket(`ws://${location.host}/v1/discuss/stream`);
+            ws.onopen = () => {
+                ws.send(JSON.stringify({message: msg, max_rounds: 2}));
+            };
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                if (data.type === 'event') {
+                    const evt = data.payload;
+                    if (roundDiv.lastChild && roundDiv.lastChild.className === 'divider') {
+                        const lastRoundText = roundDiv.lastChild.textContent;
+                        const expected = `--- 第 ${evt.round} 轮`;
+                        if (!lastRoundText.startsWith(expected)) {
+                            const d = document.createElement('div');
+                            d.className = 'divider';
+                            d.textContent = `--- 第 ${evt.round} 轮 ${evt.event_type==='moderation'?'· 主持人对齐':''} ---`;
+                            roundDiv.appendChild(d);
+                        }
+                    } else {
+                        const d = document.createElement('div');
+                        d.className = 'divider';
+                        d.textContent = `--- 第 ${evt.round} 轮 ${evt.event_type==='moderation'?'· 主持人对齐':''} ---`;
+                        roundDiv.appendChild(d);
+                    }
+                    appendEvent(roundDiv, evt);
+                    container.scrollTop = container.scrollHeight;
+                } else if (data.type === 'done') {
+                    btn.disabled = false; btn.textContent = '实时流式讨论';
+                    ws.close();
+                } else if (data.type === 'error') {
+                    roundDiv.innerHTML += `<div style="color:red">错误: ${data.message}</div>`;
+                    btn.disabled = false; btn.textContent = '实时流式讨论';
+                    ws.close();
+                }
+            };
+            ws.onerror = (err) => {
+                roundDiv.innerHTML += `<div style="color:red">WebSocket 连接失败</div>`;
+                btn.disabled = false; btn.textContent = '实时流式讨论';
+            };
         }
     </script>
 </body>
