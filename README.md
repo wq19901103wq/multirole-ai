@@ -1,5 +1,7 @@
 # Multirole AI - Harness Engine
 
+[![GitHub](https://img.shields.io/badge/GitHub-wq19901103wq%2Fmultirole--ai-blue)](https://github.com/wq19901103wq/multirole-ai)
+
 一个分层架构的多代理 AI 讨论系统，核心解决**多 bot 讨论离题（Topic Drift）**问题。
 
 ## 架构设计
@@ -79,6 +81,12 @@ multirole-ai/
 │   ├── test_model_router.py
 │   ├── test_session.py
 │   └── test_redis_integration.py
+├── benchmarks/               # 性能基准测试
+│   └── benchmark_engine.py
+├── Dockerfile                # Docker 构建
+├── docker-compose.yml        # 一键部署（含 Redis）
+├── .dockerignore
+├── .gitignore
 └── requirements.txt
 ```
 
