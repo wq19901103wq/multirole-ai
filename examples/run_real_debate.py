@@ -37,10 +37,10 @@ def main():
 
     print(f"\n▶ 开始讨论话题：{topic.text}\n")
 
-    # 展示动态生成的角色
+    # 展示动态生成的角色（基于 LLM 话题分析）
     from harness_engine.persona_generator import PersonaGenerator
-    personas = PersonaGenerator.generate(topic.text)
-    print("  本场讨论邀请的嘉宾：")
+    personas = PersonaGenerator.generate(topic.text, router=router)
+    print("  本场讨论的自然维度：")
     for p in personas:
         print(f"    {p.emoji} {p.name} — {p.personality}")
     print()

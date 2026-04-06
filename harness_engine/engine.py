@@ -48,7 +48,7 @@ class HarnessEngine:
         适合 WebSocket 实时推送场景。
         """
         if personas is None:
-            personas = PersonaGenerator.generate(topic.text)
+            personas = PersonaGenerator.generate(topic.text, router=self.router)
         moderator = ModeratorAgent()
 
         anchor = TopicAnchor(topic)
