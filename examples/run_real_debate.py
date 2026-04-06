@@ -36,6 +36,15 @@ def main():
     )
 
     print(f"\n▶ 开始讨论话题：{topic.text}\n")
+
+    # 展示动态生成的角色
+    from harness_engine.persona_generator import PersonaGenerator
+    personas = PersonaGenerator.generate(topic.text)
+    print("  本场讨论邀请的嘉宾：")
+    for p in personas:
+        print(f"    {p.emoji} {p.name} — {p.personality}")
+    print()
+
     results = engine.run(topic=topic, max_rounds=2, force_manual=True)
 
     for turn in results:

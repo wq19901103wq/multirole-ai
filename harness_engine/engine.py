@@ -9,6 +9,7 @@ from drift_guard.truncator import ContextTruncator
 from .group_chat import HarnessGroupChat
 from .agents.debater import DebaterAgent
 from .agents.moderator import ModeratorAgent
+from .persona_generator import PersonaGenerator
 
 
 class HarnessEngine:
@@ -21,13 +22,6 @@ class HarnessEngine:
     3. 集成 DriftGuard 防止话题漂移
     4. 输出结构化的 TurnResult
     """
-
-    DEFAULT_PERSONAS = [
-        DebaterAgent("planner", "规划师", "善于分析需求、拆解任务、制定计划", "条理清晰，注重可行性", "👤", "#FF6B6B"),
-        DebaterAgent("engineer", "工程师", "技术专家，关注实现细节", "务实直接，注重代码和方案", "👨‍💻", "#4ECDC4"),
-        DebaterAgent("analyst", "分析师", "数据驱动，善于发现洞察", "用数据说话，理性客观", "📊", "#45B7D1"),
-        DebaterAgent("writer", "文案师", "文字工作者，善于总结表达", "简洁有力，注重可读性", "📝", "#96CEB4"),
-    ]
 
     def __init__(self, router: ModelRouter):
         self.router = router
@@ -53,7 +47,8 @@ class HarnessEngine:
         生成器版本：逐轮 yield TurnResult，同时支持逐消息回调 on_message。
         适合 WebSocket 实时推送场景。
         """
-        personas = personas or self.DEFAULT_PERSONAS
+        if personas is None:
+            personas = PersonaGenerator.generate(topic.text)
         moderator = ModeratorAgent()
 
         anchor = TopicAnchor(topic)

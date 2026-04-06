@@ -71,7 +71,7 @@ multirole-ai/
 │   └── server.py             # Flask HTTP 统一入口
 ├── examples/
 │   └── run_debate.py         # 命令行示例
-├── tests/                    # 测试套件（27 项全通过）
+├── tests/                    # 测试套件（37 项全通过）
 │   ├── conftest.py
 │   ├── test_adapters.py
 │   ├── test_api.py
@@ -80,6 +80,7 @@ multirole-ai/
 │   ├── test_drift_guard.py
 │   ├── test_harness_engine.py
 │   ├── test_model_router.py
+│   ├── test_persona_generator.py
 │   ├── test_session.py
 │   └── test_redis_integration.py
 ├── benchmarks/               # 性能基准测试
@@ -110,11 +111,12 @@ multirole-ai/
 | **Redis 集成** | ✅ 完成 | `RedisSessionStore` + 真实 Redis 集成测试（5 项） |
 | **OpenClaw 技能** | ✅ 完成 | 已注册为 OpenClaw 技能 `multirole-ai`，可直接调用 |
 | **飞书 API 端点** | ✅ 完成 | `/v1/feishu/discuss` + 独立 `feishu_server.py` 回调服务 |
+| **动态角色匹配** | ✅ 完成 | `PersonaGenerator` 根据话题自动匹配 4 个专业视角 |
 | **Swagger 文档** | ✅ 完成 | `/apidocs/` 自动生成 OpenAPI 文档 |
 | **WebSocket 流式** | ✅ 完成 | `/v1/discuss/stream` 实时逐条推送讨论结果 |
 | **CI/CD** | ✅ 完成 | GitHub Actions 自动跑测试 + Redis |
 | **真实 LLM 演示** | ✅ 完成 | `examples/run_real_debate.py` 端到端演示 |
-| **测试覆盖** | ✅ 27/27 通过 | `pytest -q` 全绿 |
+| **测试覆盖** | ✅ 37/37 通过 | `pytest -q` 全绿 |
 
 ## 核心创新：DriftGuard 防漂移机制
 
@@ -134,6 +136,24 @@ multirole-ai/
 
 ### 4. RelevanceScorer（二次评分）
 - 当 agent 自评不可靠时，由独立 LLM 判定相关性
+
+## 动态角色匹配（PersonaGenerator）
+
+传统多代理系统使用固定角色（如永远是"工程师"+"分析师"），这会导致非技术话题下角色强行套角度、抓不住重点。
+
+我们的解决方案：
+- **`PersonaGenerator`** 根据话题关键词动态匹配 4 个角色
+- 框架视角（规划师）和数据视角（分析师）保持不变
+- **执行/专业视角** 动态切换：
+  - 技术话题 → 工程师
+  - 商业话题 → 运营专家
+  - 社会/人文话题 → 实践者/教育者
+  - 政策/法律话题 → 政策分析师
+  - 设计话题 → 设计师
+  - 无明显特征 → 领域实践者（通用执行视角）
+
+同时每个角色的 Prompt 都带有**柔性约束**：
+> "如果这个话题与你的专业背景关联不大，请不要强行套用专业术语，从普通人视角切入。"
 
 ## 快速开始
 
