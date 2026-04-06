@@ -4,35 +4,20 @@ from harness_engine.engine import HarnessEngine
 from core.topic import Topic
 
 
-def test_generate_personas_tech_fallback():
-    """无 LLM 时，技术话题应匹配到技术相关维度 + 通用维度"""
+def test_generate_personas_default():
+    """无 LLM 时，应返回 4 个平等的思考者"""
     personas = PersonaGenerator.generate("人工智能会取代程序员吗？")
     assert len(personas) == 4
     names = [p.name for p in personas]
-    assert "技术实现" in names
+    assert names == ["思考者一", "思考者二", "思考者三", "思考者四"]
 
 
-def test_generate_personas_social_fallback():
-    """无 LLM 时，社会话题应匹配到社会相关维度 + 通用维度"""
-    personas = PersonaGenerator.generate("远程工作对家庭关系的影响")
-    assert len(personas) == 4
-    names = [p.name for p in personas]
-    assert "社会影响" in names or "个体体验" in names
-
-
-def test_generate_personas_business_fallback():
-    personas = PersonaGenerator.generate("这个产品的商业模式是什么？")
-    assert len(personas) == 4
-    names = [p.name for p in personas]
-    assert "经济影响" in names
-
-
-def test_generate_personas_generic_fallback():
-    """无明显特征的话题，应返回通用维度"""
+def test_generate_personas_shared_style():
+    """所有思考者都应带有互动讨论的 style"""
     personas = PersonaGenerator.generate("随便聊聊")
-    assert len(personas) == 4
-    names = [p.name for p in personas]
-    assert "核心逻辑" in names
+    for p in personas:
+        assert "圆桌讨论" in p.style
+        assert "赞同、补充、质疑或反驳" in p.style
 
 
 def test_engine_uses_dynamic_personas(router):
@@ -41,12 +26,11 @@ def test_engine_uses_dynamic_personas(router):
     results = engine.run(topic, max_rounds=1, force_manual=True)
 
     assert len(results) == 1
-    # 动态角色数量不一定是 4，但至少 2 个 debater + 1 moderator
-    assert len(results[0].messages) >= 3
+    # 4 个思考者 + 1 个 moderator
+    assert len(results[0].messages) == 5
 
-    # 验证动态生成的角色确实被使用了
     sender_ids = [m.sender_id for m in results[0].messages if not m.is_moderation]
-    assert len(sender_ids) >= 2
+    assert "thinker_1" in sender_ids
 
 
 def test_engine_custom_personas_override_dynamic(router):

@@ -1,137 +1,98 @@
-from typing import List, Optional
+from typing import List
 from .agents.debater import DebaterAgent
 
 
 class PersonaGenerator:
     """
-    根据话题动态生成最自然的讨论维度，而不是硬套固定职业角色。
+    生成一组平等、自由的讨论者。
 
-    核心思想：
-    - 很多话题不需要"工程师"、"数据分析师"或"文案师"
-    - 角色的存在是为了提供视角多样性，但视角必须贴合话题本身
-    - 因此我们先分析话题的"自然讨论维度"，每个维度就是一个 Agent
+    不再预设固定角度或认知风格标签，
+    4 个 Agent 都是善于深度思考的参与者，
+    只是通过对话机制和互动 prompt 鼓励它们互相补充、质疑、反驳，
+    最终推动讨论向更深入、更正确的方向发展。
     """
+
+    PARTICIPANT_NAMES = [
+        ("thinker_1", "思考者一", "🤔", "#FF6B6B"),
+        ("thinker_2", "思考者二", "💡", "#4ECDC4"),
+        ("thinker_3", "思考者三", "🔍", "#45B7D1"),
+        ("thinker_4", "思考者四", "🌿", "#96CEB4"),
+    ]
+
+    SHARED_STYLE = """你是一个善于深度思考的智能体。
+
+这是一个真实的圆桌讨论，不是各自独白。
+你可以赞同、补充、质疑或反驳前面发言者的观点。
+你的目标是推动讨论向更深入、更正确的方向发展。
+如果某个观点有问题，请直接指出；如果某个观点有价值，请在此基础上进一步延伸。
+不要生硬地套用固定角度，而是根据话题本身和前面的讨论内容自由思考。"""
 
     @staticmethod
     def generate(topic_text: str, router=None) -> List[DebaterAgent]:
-        """
-        生成动态的、贴合话题的讨论角色。
-
-        如果有 router（含真实 LLM），优先用 LLM 分析话题维度；
-        如果没有 router，使用基于关键词的本地规则作为 fallback。
-        """
+        """生成 4 个平等的讨论者"""
+        # 如果有 LLM，可以让它为每个参与者写一句贴合话题的启动提示
         if router is not None:
             try:
-                return PersonaGenerator._generate_by_llm(topic_text, router)
+                return PersonaGenerator._generate_with_llm(topic_text, router)
             except Exception:
                 pass
-        return PersonaGenerator._generate_by_rules(topic_text)
+        return PersonaGenerator._generate_default()
 
     @staticmethod
-    def _generate_by_llm(topic_text: str, router) -> List[DebaterAgent]:
-        """调用 LLM 分析话题最适合的 3-4 个讨论维度"""
-        prompt = f"""请分析下面这个话题，指出最适合从哪3-4个不同的角度/维度进行深入讨论。
+    def _generate_default() -> List[DebaterAgent]:
+        return [
+            DebaterAgent(
+                agent_id=aid,
+                name=name,
+                personality="善于深度思考、批判性分析和建设性对话",
+                style=PersonaGenerator.SHARED_STYLE,
+                emoji=emoji,
+                color=color,
+            )
+            for aid, name, emoji, color in PersonaGenerator.PARTICIPANT_NAMES
+        ]
 
-要求：
-1. 每个角度必须是该话题的**自然思考维度**，不要生搬硬套固定职业角色
-2. 如果话题不需要数据支撑，就不要出现"数据分析"角度
-3. 如果话题不需要技术，就不要出现"技术"角度
-4. 直接用该话题的内在维度命名，比如"社会变迁"、"个体心理"、"经济影响"、"伦理边界"、"历史演变"、"实践可行性"等
-5. 每个角度的描述要简洁，说明这个角度会关注什么
-6. 输出格式严格如下，每行一个角度，不要有多余内容：
-角度名|角度描述
+    @staticmethod
+    def _generate_with_llm(topic_text: str, router) -> List[DebaterAgent]:
+        """让 LLM 给 4 个思考者各写一句贴合话题的启动提醒"""
+        prompt = f"""话题：{topic_text}
 
-话题：{topic_text}
+有 4 位思考者即将围绕这个话题展开自由讨论。
+请为每位思考者写一句贴合该话题的启动提醒（不要分配固定角度，只是提醒他们在讨论时可以特别关注什么）。
+
+格式：
+思考者编号|提醒内容
+
+例如：
+思考者一|可以先从最明显的直觉判断切入
+思考者二|注意检验前面观点中可能存在的隐含假设
 """
         raw = router.chat(
             messages=[{"role": "user", "content": prompt}],
-            system="你是一个善于多角度分析问题的思维框架专家。",
-            max_tokens=300,
-            temperature=0.3,
+            system="你是一个善于设计开放式讨论的专家。",
+            max_tokens=200,
+            temperature=0.5,
         )
-        return PersonaGenerator._parse_llm_output(topic_text, raw)
 
-    @staticmethod
-    def _parse_llm_output(topic_text: str, raw: str) -> List[DebaterAgent]:
-        """解析 LLM 返回的角度列表，生成 DebaterAgent"""
+        tweaks = {}
+        for line in raw.strip().split("\n"):
+            if "|" in line:
+                parts = line.split("|", 1)
+                key = parts[0].strip().lstrip("1234.- ")
+                tweaks[key] = parts[1].strip()
+
         agents = []
-        emojis = ["👤", "🌿", "📐", "🔍", "💡", "🪞"]
-        colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FDCB6E", "#A29BFE"]
-
-        lines = [line.strip() for line in raw.strip().split("\n") if line.strip() and "|" in line]
-
-        for idx, line in enumerate(lines[:4]):
-            parts = line.split("|", 1)
-            name = parts[0].strip()
-            desc = parts[1].strip() if len(parts) > 1 else ""
-
-            # 清理可能的序号前缀
-            name = name.lstrip("1234.- ")
-
-            agent_id = f"angle_{idx}"
+        for aid, name, emoji, color in PersonaGenerator.PARTICIPANT_NAMES:
+            tweak = tweaks.get(name, "")
+            style = PersonaGenerator.SHARED_STYLE
+            if tweak:
+                style += f"\n启动提醒：{tweak}"
             agents.append(DebaterAgent(
-                agent_id=agent_id,
+                agent_id=aid,
                 name=name,
-                personality=desc or f"从{name}的角度深入思考",
-                style=f"你是{name}视角的发言人。你的任务是从{name}切入，直接回应该议题。不要套用不相关的专业术语，如果该角度与话题关联较弱，就从普通人的常识逻辑出发。",
-                emoji=emojis[idx % len(emojis)],
-                color=colors[idx % len(colors)],
+                personality="善于深度思考、批判性分析和建设性对话",
+                style=style,
+                emoji=emoji,
+                color=color,
             ))
-
-        if not agents:
-            raise ValueError("LLM 未返回有效的讨论维度")
-
-        return agents
-
-    @staticmethod
-    def _generate_by_rules(topic_text: str) -> List[DebaterAgent]:
-        """无 LLM 时的本地规则 fallback，基于关键词匹配常见维度"""
-        text = topic_text.lower()
-
-        # 定义常见维度及其触发关键词
-        dimension_keywords = {
-            "技术实现": ["代码", "程序", "技术", "工程", "系统", "架构", "算法", "开发", "软件", "硬件", "数据库", "前端", "后端", "ai", "人工智能", "机器学习", "python", "java", "云", "服务器", "网络安全"],
-            "经济影响": ["商业", "市场", "产品", "运营", "用户", "增长", "营销", "品牌", "销售", "商业模式", "盈利", "获客", "转化", "客户", "竞争", "战略", "创业", "投资", "融资", "成本", "价格", "收入"],
-            "社会影响": ["社会", "文化", "心理", "教育", "伦理", "家庭", "婚姻", "婚恋", "人际关系", "情感", "价值观", "哲学", "历史", "艺术", "文学", "政治", "阶层", "性别", "代际", "传统", "习俗", "年轻人", "恋爱", "家庭关系"],
-            "政策法规": ["政策", "法律", "法规", "政府", "监管", "合规", "税收", "劳动法", "知识产权", "隐私", "数据保护", "行业标准", "公共治理", "宏观调控", "国际关系", "外交"],
-            "个体体验": ["个人", "体验", "感受", "情绪", "健康", "生活质量", "幸福感", "压力", "焦虑", "自我", "成长", "选择", "自由", "权利", "隐私"],
-            "实践落地": ["怎么做", "方法", "步骤", "落地", "执行", "操作", "方案", "计划", "建议", "指南", "教程", "最佳实践"],
-        }
-
-        matched = []
-        for dim_name, keywords in dimension_keywords.items():
-            score = sum(1 for kw in keywords if kw.lower() in text)
-            if score > 0:
-                matched.append((dim_name, score))
-
-        # 按匹配分数排序
-        matched.sort(key=lambda x: x[1], reverse=True)
-        selected = [m[0] for m in matched]
-
-        # 如果没有明显匹配，使用一组通用维度
-        if not selected:
-            selected = ["核心逻辑", "现实约束", "不同立场", "综合建议"]
-
-        # 补充通用维度，确保总有 3-4 个自然角度
-        generic_dims = ["关键权衡", "实际影响", "潜在风险", "不同立场"]
-        for g in generic_dims:
-            if len(selected) >= 4:
-                break
-            if g not in selected:
-                selected.append(g)
-
-        emojis = ["👤", "🌿", "📐", "🔍", "💡", "🪞"]
-        colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FDCB6E", "#A29BFE"]
-
-        agents = []
-        for idx, dim_name in enumerate(selected[:4]):
-            agents.append(DebaterAgent(
-                agent_id=f"angle_{idx}",
-                name=dim_name,
-                personality=f"从{dim_name}的角度深入思考该议题",
-                style=f"你是{dim_name}视角的发言人。你的任务是从{dim_name}切入，直接回应该议题。不要套用不相关的专业术语，如果该角度与话题关联较弱，就从普通人的常识逻辑出发。",
-                emoji=emojis[idx % len(emojis)],
-                color=colors[idx % len(colors)],
-            ))
-
         return agents

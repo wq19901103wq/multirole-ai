@@ -78,8 +78,19 @@ class HarnessGroupChat:
 
         for spec in participants:
             system = self.topic_anchor.inject_prompt(spec.name, spec.personality, spec.style)
+
+            # 构建对话历史：当前 Agent 能看到前面所有 Agent 的发言
+            conversation = [{"role": "user", "content": context}]
+            for prev_msg in messages:
+                if prev_msg.is_moderation:
+                    continue
+                conversation.append({
+                    "role": "assistant",
+                    "content": f"{prev_msg.sender_name}: {prev_msg.content}"
+                })
+
             raw = self.router.chat(
-                messages=[{"role": "user", "content": context}],
+                messages=conversation,
                 system=system,
                 max_tokens=250,
                 temperature=0.5,

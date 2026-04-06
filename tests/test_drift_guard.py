@@ -8,10 +8,11 @@ def test_topic_anchor_injects_forbidden_words():
     topic = Topic(text="如何设计高性能网站？")
     anchor = TopicAnchor(topic)
     prompt = anchor.inject_prompt("工程师", "技术专家", "务实")
-    assert "关于'如何设计高性能网站？'，我的观点是：" in prompt
+    assert "如何设计高性能网站？" in prompt
     assert "此外" in prompt
     assert "值得一提的是" in prompt
     assert "相关性：X/10" in prompt
+    assert "赞同、补充、质疑或反驳" in prompt
 
 
 def test_extract_relevance():

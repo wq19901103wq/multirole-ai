@@ -37,13 +37,13 @@ def main():
 
     print(f"\n▶ 开始讨论话题：{topic.text}\n")
 
-    # 展示动态生成的角色（基于 LLM 话题分析）
+    # 展示本场讨论的参与者
     from harness_engine.persona_generator import PersonaGenerator
     personas = PersonaGenerator.generate(topic.text, router=router)
-    print("  本场讨论的自然维度：")
+    print("  本场圆桌讨论的参与者：")
     for p in personas:
-        print(f"    {p.emoji} {p.name} — {p.personality}")
-    print()
+        print(f"    {p.emoji} {p.name}")
+    print("  规则：自由发言，可以补充、质疑或反驳前面的观点\n")
 
     results = engine.run(topic=topic, max_rounds=2, force_manual=True)
 
