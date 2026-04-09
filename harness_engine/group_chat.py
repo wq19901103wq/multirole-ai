@@ -42,6 +42,7 @@ class HarnessGroupChat:
         prev_summary: Optional[str] = None,
         force_manual: bool = False,
         on_message=None,
+        full_history: Optional[List[Message]] = None,
     ) -> List[Message]:
         if self._autogen_available and not force_manual:
             # AutoGen 模式不支持逐消息回调，先跑完再批量回调（如有需要）
@@ -54,13 +55,26 @@ class HarnessGroupChat:
             return msgs
         else:
             return self._run_manual(
-                round_num, participants, moderator_spec, topic_text, prev_summary, on_message=on_message
+                round_num, participants, moderator_spec, topic_text, prev_summary, on_message=on_message, full_history=full_history
             )
 
-    def _build_context(self, round_num: int, topic_text: str, prev_summary: Optional[str]) -> str:
+    def _build_context(self, round_num: int, topic_text: str, prev_summary: Optional[str], full_history: Optional[List[Message]] = None) -> str:
         lines = [f"=== 核心议题 ===\n{topic_text}"]
-        if prev_summary:
+
+        # 共识模式下，如果历史较多，提炼关键交锋点
+        if full_history and len(full_history) > 5:
+            lines.append("\n=== 前面轮次的关键讨论 ===")
+            # 提取每轮 moderator 摘要 + 最后一个 debater 的收尾观点
+            seen_rounds = set()
+            for msg in full_history:
+                if msg.is_moderation:
+                    rnd = msg.metadata.get("round", 0)
+                    if rnd not in seen_rounds:
+                        seen_rounds.add(rnd)
+                        lines.append(f"第 {rnd} 轮总结：{msg.content[:100]}...")
+        elif prev_summary:
             lines.append(f"\n=== 上轮核心摘要 ===\n{prev_summary}")
+
         lines.append(f"\n当前是第 {round_num} 轮。请严格遵循议题锚定规则发言。")
         return "\n".join(lines)
 
@@ -72,9 +86,10 @@ class HarnessGroupChat:
         topic_text: str,
         prev_summary: Optional[str],
         on_message=None,
+        full_history: Optional[List[Message]] = None,
     ) -> List[Message]:
         messages: List[Message] = []
-        context = self._build_context(round_num, topic_text, prev_summary)
+        context = self._build_context(round_num, topic_text, prev_summary, full_history)
 
         for spec in participants:
             system = self.topic_anchor.inject_prompt(spec.name, spec.personality, spec.style)
@@ -92,8 +107,8 @@ class HarnessGroupChat:
             raw = self.router.chat(
                 messages=conversation,
                 system=system,
-                max_tokens=250,
-                temperature=0.5,
+                max_tokens=1000,
+                temperature=0.7,
             )
             relevance = self.topic_anchor.extract_relevance(raw)
             msg = Message(

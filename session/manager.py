@@ -47,11 +47,42 @@ class SessionManager:
         session.turn_results.extend(turn_results)
         self.store.save(session)
 
-        # 转换为事件流
+        return self._turns_to_events(turn_results)
+
+    def run_discussion_consensus(
+        self,
+        session_id: str,
+        user_message: str,
+        max_rounds: int = 10,
+        force_manual: bool = False,
+    ) -> List[DiscussionEvent]:
+        session = self.store.get(session_id)
+        if session is None:
+            session = self.create_session(session_id, user_message)
+
+        topic = Topic(text=user_message)
+        turn_results = self.engine.run_until_consensus(
+            topic=topic,
+            max_rounds=max_rounds,
+            force_manual=force_manual,
+        )
+
+        session.turn_results.extend(turn_results)
+        self.store.save(session)
+
+        return self._turns_to_events(turn_results)
+
+    @staticmethod
+    def _turns_to_events(turn_results: List[TurnResult]) -> List[DiscussionEvent]:
         events: List[DiscussionEvent] = []
         for turn in turn_results:
             for msg in turn.messages:
-                evt_type = "moderation" if msg.is_moderation else "message"
+                if msg.metadata.get("type") == "consensus":
+                    evt_type = "consensus"
+                elif msg.is_moderation:
+                    evt_type = "moderation"
+                else:
+                    evt_type = "message"
                 events.append(DiscussionEvent(
                     event_type=evt_type,
                     payload=msg,

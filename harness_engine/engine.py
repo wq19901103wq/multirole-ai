@@ -10,6 +10,7 @@ from .group_chat import HarnessGroupChat
 from .agents.debater import DebaterAgent
 from .agents.moderator import ModeratorAgent
 from .persona_generator import PersonaGenerator
+from .consensus_detector import ConsensusDetector
 
 
 class HarnessEngine:
@@ -82,3 +83,118 @@ class HarnessEngine:
                 metadata={"round": round_num},
             )
             yield result
+
+    def run_until_consensus(
+        self,
+        topic: Topic,
+        personas: Optional[List[DebaterAgent]] = None,
+        max_rounds: int = 10,
+        force_manual: bool = False,
+    ) -> List[TurnResult]:
+        return list(self.run_until_consensus_stream(topic, personas, max_rounds, force_manual))
+
+    def run_until_consensus_stream(
+        self,
+        topic: Topic,
+        personas: Optional[List[DebaterAgent]] = None,
+        max_rounds: int = 10,
+        force_manual: bool = False,
+        on_message: Optional[Callable[[Message], None]] = None,
+        on_consensus: Optional[Callable[[dict], None]] = None,
+    ):
+        """
+        生成器版本：持续讨论直到达成共识或达到 max_rounds 上限。
+        每轮 yield TurnResult，最后如果达成共识会额外 yield 一个标记轮次。
+        """
+        if personas is None:
+            personas = PersonaGenerator.generate(topic.text, router=self.router)
+        moderator = ModeratorAgent()
+
+        anchor = TopicAnchor(topic)
+        checkpoint = ModeratorCheckpoint(self.router)
+        detector = ConsensusDetector(self.router)
+        group_chat = HarnessGroupChat(self.router, anchor, checkpoint)
+
+        prev_summary: Optional[str] = None
+        all_history: List[Message] = []
+
+        for round_num in range(1, max_rounds + 1):
+            round_messages = group_chat.run_round(
+                round_num=round_num,
+                participants=personas,
+                moderator_spec=moderator,
+                topic_text=topic.text,
+                prev_summary=prev_summary,
+                force_manual=force_manual,
+                on_message=on_message,
+                full_history=all_history,
+            )
+            all_history.extend(round_messages)
+
+            # 解析 moderator 的结果
+            mod_msg = [m for m in round_messages if m.is_moderation][-1]
+            drift_detected = mod_msg.metadata.get("drift_detected", False)
+            prev_summary = mod_msg.content
+
+            result = TurnResult(
+                messages=round_messages,
+                summary=prev_summary,
+                drift_detected=drift_detected,
+                drift_report=mod_msg.content if drift_detected else "",
+                metadata={"round": round_num, "mode": "consensus"},
+            )
+            yield result
+
+            # 检测是否达成共识
+            consensus = detector.check(topic.text, round_messages)
+            if on_consensus:
+                on_consensus(consensus)
+
+            if consensus.get("consensus_reached") and consensus.get("confidence", 0) >= 0.6:
+                # 生成最终共识轮次
+                consensus_msg = Message(
+                    role=Role.MODERATOR,
+                    content=f"🤝 讨论已达成共识（第 {round_num} 轮）\n\n共识总结：{consensus.get('consensus_summary', '')}",
+                    sender_id="consensus",
+                    sender_name="共识主持人",
+                    metadata={"type": "consensus", "round": round_num},
+                )
+                if on_message:
+                    on_message(consensus_msg)
+
+                yield TurnResult(
+                    messages=[consensus_msg],
+                    summary=consensus.get("consensus_summary", ""),
+                    drift_detected=False,
+                    drift_report="",
+                    metadata={
+                        "round": round_num,
+                        "mode": "consensus",
+                        "consensus_reached": True,
+                        "consensus_summary": consensus.get("consensus_summary", ""),
+                    },
+                )
+                return
+
+        # 达到上限仍未达成共识
+        final_msg = Message(
+            role=Role.MODERATOR,
+            content=f"⏹ 讨论已达到最大轮次（{max_rounds} 轮），未能达成共识。",
+            sender_id="consensus",
+            sender_name="共识主持人",
+            metadata={"type": "consensus_timeout", "round": max_rounds},
+        )
+        if on_message:
+            on_message(final_msg)
+
+        yield TurnResult(
+            messages=[final_msg],
+            summary="未能达成共识",
+            drift_detected=False,
+            drift_report="",
+            metadata={
+                "round": max_rounds,
+                "mode": "consensus",
+                "consensus_reached": False,
+            },
+        )

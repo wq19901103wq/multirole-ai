@@ -191,6 +191,59 @@ def feishu_discuss():
     return jsonify(rendered)
 
 
+@app.route('/v1/discuss/consensus', methods=['POST'])
+def discuss_consensus():
+    """
+    共识讨论接口：持续多轮讨论直到达成一致或达到上限
+    ---
+    tags:
+      - Discussion
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "远程工作是否值得推广？"
+            session_id:
+              type: string
+              example: "default"
+            max_rounds:
+              type: integer
+              example: 10
+            force_manual:
+              type: boolean
+              example: false
+    responses:
+      200:
+        description: 讨论结果（含 consensus_reached 标记）
+    """
+    data = request.json or {}
+    user_message = web_adapter.extract_user_message(data)
+    session_id = web_adapter.extract_session_id(data)
+    max_rounds = data.get("max_rounds", 10)
+    force_manual = data.get("force_manual", False)
+
+    if not user_message:
+        return jsonify({"error": "message is required"}), 400
+
+    events = session_manager.run_discussion_consensus(
+        session_id=session_id,
+        user_message=user_message,
+        max_rounds=max_rounds,
+        force_manual=force_manual,
+    )
+
+    rendered = web_adapter.render_events(events)
+    return jsonify({
+        "events": rendered,
+        "session_id": session_id,
+    })
+
+
 def discuss_stream(ws):
     """
     WebSocket 实时流式讨论接口。
@@ -239,8 +292,72 @@ def discuss_stream(ws):
         ws.send(json.dumps({"type": "error", "message": str(e)}))
 
 
+def discuss_consensus_stream(ws):
+    """
+    WebSocket 共识讨论接口：持续多轮直到达成一致。
+    客户端发送 JSON：{"message": "...", "session_id": "...", "max_rounds": 10}
+    """
+    try:
+        raw = ws.receive(timeout=5)
+        if not raw:
+            ws.send(json.dumps({"error": "empty request"}))
+            return
+        data = json.loads(raw)
+    except Exception as e:
+        ws.send(json.dumps({"error": f"invalid json: {e}"}))
+        return
+
+    user_message = web_adapter.extract_user_message(data)
+    session_id = web_adapter.extract_session_id(data)
+    max_rounds = data.get("max_rounds", 10)
+
+    if not user_message:
+        ws.send(json.dumps({"error": "message is required"}))
+        return
+
+    ws.send(json.dumps({"type": "status", "text": "共识讨论开始（最多 " + str(max_rounds) + " 轮）"}))
+
+    from core.topic import Topic
+    topic_obj = Topic(text=user_message)
+
+    def on_message(msg):
+        evt = _msg_to_event(msg, msg.metadata.get("round", 0))
+        ws.send(json.dumps({"type": "event", "payload": evt}))
+
+    def on_consensus(consensus):
+        ws.send(json.dumps({
+            "type": "consensus_check",
+            "reached": consensus.get("consensus_reached", False),
+            "confidence": consensus.get("confidence", 0),
+        }))
+
+    try:
+        for turn in session_manager.engine.run_until_consensus_stream(
+            topic=topic_obj,
+            max_rounds=max_rounds,
+            force_manual=True,
+            on_message=on_message,
+            on_consensus=on_consensus,
+        ):
+            ws.send(json.dumps({"type": "turn_end", "round": turn.metadata.get("round", 0)}))
+            if turn.metadata.get("consensus_reached"):
+                ws.send(json.dumps({
+                    "type": "consensus",
+                    "summary": turn.metadata.get("consensus_summary", ""),
+                }))
+                break
+            elif turn.metadata.get("round") == max_rounds and not turn.metadata.get("consensus_reached"):
+                ws.send(json.dumps({"type": "timeout"}))
+                break
+
+        ws.send(json.dumps({"type": "done", "session_id": session_id}))
+    except Exception as e:
+        ws.send(json.dumps({"type": "error", "message": str(e)}))
+
+
 if sock is not None:
     sock.route('/v1/discuss/stream')(discuss_stream)
+    sock.route('/v1/discuss/consensus/stream')(discuss_consensus_stream)
 
 
 @app.route('/health', methods=['GET'])
@@ -286,6 +403,7 @@ HTML_DEMO = """
         .role-name { font-weight: 600; font-size: 14px; }
         .message-content { background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 3px solid; margin-left: 42px; line-height: 1.6; }
         .moderator-content { background: #fff8e1; }
+        .consensus-content { background: #e8f5e9; font-weight: 500; }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px; }
         .badge-drift { background: #ffebee; color: #c62828; }
         .badge-good { background: #e8f5e9; color: #2e7d32; }
@@ -324,6 +442,7 @@ HTML_DEMO = """
         <textarea id="userInput" rows="2" placeholder="输入问题，发起多代理讨论..."></textarea>
         <button class="btn" id="sendBtn" onclick="startDiscussion()">发起讨论</button>
         <button class="btn btn-secondary" id="streamBtn" onclick="startStreamDiscussion()">实时流式讨论</button>
+        <button class="btn btn-secondary" id="consensusBtn" onclick="startConsensusDiscussion()">🤝 共识讨论</button>
     </div>
     <script>
         async function startDiscussion() {
@@ -360,7 +479,8 @@ HTML_DEMO = """
 
         function appendEvent(container, evt) {
             const isMod = evt.event_type === 'moderation';
-            const meta = !isMod && evt.relevance !== undefined
+            const isConsensus = evt.event_type === 'consensus';
+            const meta = !isMod && !isConsensus && evt.relevance !== undefined
                 ? `<span class="badge ${evt.relevance < 8 ? 'badge-drift' : 'badge-good'}">相关性 ${evt.relevance}/10</span>` : '';
             const div = document.createElement('div'); div.className = 'message';
             div.innerHTML = `
@@ -368,7 +488,7 @@ HTML_DEMO = """
                     <div class="avatar" style="background:${evt.color}20;color:${evt.color};">${evt.emoji}</div>
                     <span class="role-name" style="color:${evt.color};">${evt.role_name}</span>${meta}
                 </div>
-                <div class="message-content ${isMod?'moderator-content':''}" style="border-color:${evt.color};">${evt.content}</div>
+                <div class="message-content ${isMod?'moderator-content':''} ${isConsensus?'consensus-content':''}" style="border-color:${evt.color};">${evt.content}</div>
             `;
             container.appendChild(div);
         }
@@ -422,6 +542,80 @@ HTML_DEMO = """
             ws.onerror = (err) => {
                 roundDiv.innerHTML += `<div style="color:red">WebSocket 连接失败</div>`;
                 btn.disabled = false; btn.textContent = '实时流式讨论';
+            };
+        }
+
+        function startConsensusDiscussion() {
+            const input = document.getElementById('userInput');
+            const btn = document.getElementById('consensusBtn');
+            const msg = input.value.trim();
+            if (!msg) return;
+            btn.disabled = true; btn.textContent = '共识讨论中...'; input.value = '';
+            const container = document.getElementById('chatContainer');
+            const roundDiv = document.createElement('div');
+            roundDiv.className = 'discussion-round';
+            roundDiv.innerHTML = `<div class="round-title">🤝 ${msg.substring(0,30)}... (共识模式)</div>`;
+            container.appendChild(roundDiv); container.scrollTop = container.scrollHeight;
+
+            const ws = new WebSocket(`ws://${location.host}/v1/discuss/consensus/stream`);
+            ws.onopen = () => {
+                ws.send(JSON.stringify({message: msg, max_rounds: 8}));
+            };
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                if (data.type === 'event') {
+                    const evt = data.payload;
+                    if (evt.event_type === 'consensus') {
+                        const d = document.createElement('div');
+                        d.className = 'divider';
+                        d.style.color = '#2e7d32';
+                        d.style.fontWeight = 'bold';
+                        d.textContent = '--- ✅ 达成共识 ---';
+                        roundDiv.appendChild(d);
+                        appendEvent(roundDiv, evt);
+                        container.scrollTop = container.scrollHeight;
+                        return;
+                    }
+                    if (roundDiv.lastChild && roundDiv.lastChild.className === 'divider') {
+                        const lastRoundText = roundDiv.lastChild.textContent;
+                        const expected = `--- 第 ${evt.round} 轮`;
+                        if (!lastRoundText.startsWith(expected)) {
+                            const d = document.createElement('div');
+                            d.className = 'divider';
+                            d.textContent = `--- 第 ${evt.round} 轮 ${evt.event_type==='moderation'?'· 主持人对齐':''} ---`;
+                            roundDiv.appendChild(d);
+                        }
+                    } else {
+                        const d = document.createElement('div');
+                        d.className = 'divider';
+                        d.textContent = `--- 第 ${evt.round} 轮 ${evt.event_type==='moderation'?'· 主持人对齐':''} ---`;
+                        roundDiv.appendChild(d);
+                    }
+                    appendEvent(roundDiv, evt);
+                    container.scrollTop = container.scrollHeight;
+                } else if (data.type === 'consensus_check') {
+                    const d = document.createElement('div');
+                    d.className = 'divider';
+                    d.style.fontSize = '11px';
+                    d.style.color = data.reached ? '#2e7d32' : '#999';
+                    d.textContent = data.reached ? `--- 共识检测通过 (置信度 ${Math.round(data.confidence*100)}%) ---` : `--- 尚未达成共识 (置信度 ${Math.round(data.confidence*100)}%)，继续讨论 ---`;
+                    roundDiv.appendChild(d);
+                    container.scrollTop = container.scrollHeight;
+                } else if (data.type === 'timeout') {
+                    roundDiv.innerHTML += `<div style="color:#c62828;padding:10px;">⏹ 已达到最大轮次，未能达成共识</div>`;
+                    container.scrollTop = container.scrollHeight;
+                } else if (data.type === 'done') {
+                    btn.disabled = false; btn.textContent = '🤝 共识讨论';
+                    ws.close();
+                } else if (data.type === 'error') {
+                    roundDiv.innerHTML += `<div style="color:red">错误: ${data.message}</div>`;
+                    btn.disabled = false; btn.textContent = '🤝 共识讨论';
+                    ws.close();
+                }
+            };
+            ws.onerror = (err) => {
+                roundDiv.innerHTML += `<div style="color:red">WebSocket 连接失败</div>`;
+                btn.disabled = false; btn.textContent = '🤝 共识讨论';
             };
         }
     </script>
