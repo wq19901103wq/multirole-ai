@@ -21,29 +21,14 @@ class TopicAnchor:
         self.topic = topic
 
     def inject_prompt(self, role_name: str, role_personality: str, role_style: str) -> str:
-        """为某个角色生成带议题锚定的 system prompt"""
-        forbidden_lines = "\n   - ".join([f'"{w}..."' for w in self.FORBIDDEN_PREFIXES])
+        """为某个角色生成简洁的 system prompt，仅保留议题提示"""
         return f"""你是{role_name}，{role_personality}。
 
-你的说话风格：{role_style}
+{role_style}
 
-## 议题锚定规则（必须遵守）
-{self.topic.anchor_prompt}
+讨论议题：{self.topic.text}
 
-1. 你的每一个论点都必须直接回应该议题
-2. 禁止使用的扩展性词汇（这些词是跑题的高发信号）：
-   - {forbidden_lines}
-3. 每次发言的最后，必须用独立一行写出：
-   "以上观点与核心议题的相关性：X/10"
-   如果相关性低于8，必须同时说"此观点偏离议题，跳过。"
-4. 你可以赞同、补充、质疑或反驳前面发言者的观点。这是一个真实的讨论，不是各自独白。你的目标是推动讨论向更深入、更正确的方向发展。
-5. 每次发言请进行充分论述，尽量从多个层面展开深入分析，避免蜻蜓点水。字数建议在300字以上。
-
-示例格式：
-[你的核心论点或对他人的回应]
-
-以上观点与核心议题的相关性：9/10
-"""
+请围绕上述议题发表你的观点。可以自由赞同、补充、质疑或反驳其他发言者的观点。"""
 
     @staticmethod
     def extract_relevance(text: str) -> Optional[float]:
