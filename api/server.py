@@ -8,6 +8,18 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 import json
+import logging
+import sys
+
+# 配置详细日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 try:
     from flasgger import Swagger
@@ -57,6 +69,9 @@ if os.environ.get("MULTIROLE_DEMO_MODE"):
     from examples.run_consensus_demo import DemoProvider
     default_provider = DemoProvider()
 else:
+    # 默认使用 Kimi Code 代理模式（127.0.0.1:18790）
+    # 如需使用 Moonshot API，设置 MULTIROLE_KIMI_MODE=moonshot 和 KIMI_API_KEY
+    os.environ.setdefault("MULTIROLE_KIMI_MODE", "proxy")
     ProviderRegistry.register("kimi", KimiProvider)
     default_provider = ProviderRegistry.create("kimi")
 
@@ -134,27 +149,48 @@ def discuss():
             session_id:
               type: string
     """
+    import time
+    start_time = time.time()
+    
     data = request.json or {}
     user_message = web_adapter.extract_user_message(data)
     session_id = web_adapter.extract_session_id(data)
     max_rounds = data.get("max_rounds", 2)
     force_manual = data.get("force_manual", False)
+    
+    logger.info(f"=" * 60)
+    logger.info(f"[DISCUSS] 收到请求: session={session_id}, max_rounds={max_rounds}")
+    logger.info(f"[DISCUSS] 用户消息: {user_message[:100]}...")
 
     if not user_message:
+        logger.warning("[DISCUSS] 错误: 缺少 message 参数")
         return jsonify({"error": "message is required"}), 400
 
-    events = session_manager.run_discussion(
-        session_id=session_id,
-        user_message=user_message,
-        max_rounds=max_rounds,
-        force_manual=force_manual,
-    )
-
-    rendered = web_adapter.render_events(events)
-    return jsonify({
-        "events": rendered,
-        "session_id": session_id,
-    })
+    try:
+        logger.info("[DISCUSS] 开始运行讨论...")
+        events = session_manager.run_discussion(
+            session_id=session_id,
+            user_message=user_message,
+            max_rounds=max_rounds,
+            force_manual=force_manual,
+        )
+        
+        elapsed = time.time() - start_time
+        logger.info(f"[DISCUSS] 讨论完成，生成 {len(events)} 个事件，耗时 {elapsed:.2f}s")
+        
+        rendered = web_adapter.render_events(events)
+        logger.info(f"[DISCUSS] 渲染完成，返回 {len(rendered)} 个事件")
+        logger.info(f"=" * 60)
+        
+        return jsonify({
+            "events": rendered,
+            "session_id": session_id,
+        })
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error(f"[DISCUSS] 讨论失败: {e}, 耗时 {elapsed:.2f}s")
+        logger.exception(e)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/v1/feishu/discuss', methods=['POST'])
@@ -632,4 +668,5 @@ def index():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8890, debug=True)
+    # 禁用 debug 模式以避免 semaphore 泄漏问题
+    app.run(host='0.0.0.0', port=8890, debug=False, threaded=True)

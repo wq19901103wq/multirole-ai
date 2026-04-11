@@ -88,11 +88,19 @@ class HarnessGroupChat:
         on_message=None,
         full_history: Optional[List[Message]] = None,
     ) -> List[Message]:
+        import time
+        import logging
+        logger = logging.getLogger(__name__)
+        
         messages: List[Message] = []
         context = self._build_context(round_num, topic_text, prev_summary, full_history)
+        
+        logger.info(f"[Round {round_num}] 开始讨论，话题: {topic_text[:50]}...")
+        logger.info(f"[Round {round_num}] 参与者数量: {len(participants)}")
 
-        for spec in participants:
+        for i, spec in enumerate(participants):
             system = self.topic_anchor.inject_prompt(spec.name, spec.personality, spec.style)
+            logger.info(f"[Round {round_num}] Agent {i+1}/{len(participants)} ({spec.name}) 开始生成...")
 
             # 构建对话历史：当前 Agent 能看到前面所有 Agent 的发言
             conversation = [{"role": "user", "content": context}]
@@ -104,12 +112,36 @@ class HarnessGroupChat:
                     "content": f"{prev_msg.sender_name}: {prev_msg.content}"
                 })
 
-            raw = self.router.chat(
-                messages=conversation,
-                system=system,
-                max_tokens=1000,
-                temperature=0.7,
-            )
+            # 添加重试逻辑
+            max_retries = 3
+            raw = ""
+            for attempt in range(max_retries):
+                try:
+                    start_time = time.time()
+                    raw = self.router.chat(
+                        messages=conversation,
+                        system=system,
+                        max_tokens=1000,
+                        temperature=0.7,
+                    )
+                    elapsed = time.time() - start_time
+                    logger.info(f"[Round {round_num}] Agent {spec.name} 生成完成，耗时 {elapsed:.2f}s，内容长度: {len(raw)}")
+                    
+                    # 检查是否是错误响应
+                    if raw.startswith("【") and raw.endswith("】"):
+                        logger.error(f"[Round {round_num}] Agent {spec.name} 返回错误: {raw}")
+                        if attempt < max_retries - 1:
+                            logger.info(f"[Round {round_num}] 等待 1s 后重试...")
+                            time.sleep(1)
+                            continue
+                    break
+                except Exception as e:
+                    logger.error(f"[Round {round_num}] Agent {spec.name} 调用失败 (尝试 {attempt+1}/{max_retries}): {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(1)
+                    else:
+                        raw = f"【调用失败: {e}】"
+            
             relevance = self.topic_anchor.extract_relevance(raw)
             msg = Message(
                 role=Role.ASSISTANT,
@@ -121,6 +153,9 @@ class HarnessGroupChat:
             messages.append(msg)
             if on_message:
                 on_message(msg)
+            
+            # 添加短暂延迟避免并发问题
+            time.sleep(0.1)
 
         ck = self.checkpoint.check(self.topic_anchor.topic, messages)
         mod_content = ck["summary"]
