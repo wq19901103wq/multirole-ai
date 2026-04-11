@@ -70,7 +70,7 @@ class ModelRouterChatCompletionClient(ChatCompletionClient):
         text = self.router.chat(
             messages=conversation,
             system=system,
-            max_tokens=extra_create_args.get("max_tokens", 500),
+            max_tokens=extra_create_args.get("max_tokens", 4000),
             temperature=extra_create_args.get("temperature", 0.5),
         )
 

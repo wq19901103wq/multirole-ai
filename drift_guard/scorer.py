@@ -24,7 +24,7 @@ class RelevanceScorer:
         raw = self.router.chat(
             messages=[{"role": "user", "content": prompt}],
             system=system,
-            max_tokens=10,
+            max_tokens=100,
             temperature=0.0,
         )
         try:

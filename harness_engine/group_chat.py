@@ -121,7 +121,7 @@ class HarnessGroupChat:
                     raw = self.router.chat(
                         messages=conversation,
                         system=system,
-                        max_tokens=1000,
+                        max_tokens=4000,
                         temperature=0.7,
                     )
                     elapsed = time.time() - start_time

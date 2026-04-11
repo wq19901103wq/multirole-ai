@@ -43,7 +43,7 @@ class ModeratorCheckpoint:
         raw = self.router.chat(
             messages=[{"role": "user", "content": prompt}],
             system=system,
-            max_tokens=300,
+            max_tokens=4000,
             temperature=0.3,
         )
 
