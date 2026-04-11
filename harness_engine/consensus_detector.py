@@ -57,11 +57,12 @@ class ConsensusDetector:
 }}
 """
         try:
-            # max_tokens 需要足够大以容纳 thinking + 正式回复
+            # Kimi Code 模型默认启用 thinking 模式
+            # 需要确保 max_tokens 足够容纳 thinking + 正式回复
             raw = self.router.chat(
                 messages=[{"role": "user", "content": prompt}],
                 system="你是一个善于识别讨论共识和分歧的专家。",
-                max_tokens=1000,
+                max_tokens=1200,
                 temperature=0.2,
             )
             return self._parse(raw)

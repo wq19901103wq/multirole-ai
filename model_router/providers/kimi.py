@@ -59,10 +59,11 @@ class KimiProvider(LLMProvider):
         full_messages.extend(messages)
 
         # Kimi Code 模型默认启用 thinking 模式
-        # 如果 max_tokens 太小，模型只够输出 thinking 过程，content 会为 empty
-        # 需要确保 max_tokens 足够大（至少 1000）才能同时容纳 thinking 和正式回复
-        if self.use_proxy and "kimi-for-coding" in self.model and max_tokens <= 1000:
-            max_tokens = 2000
+        # 实际输出 = reasoning_content(思考过程) + content(正式回复)
+        # 如果 max_tokens 太小，模型只够输出 thinking，content 会为 empty
+        # 测试表明 800 tokens 足够，这里设置 1200 留有余量
+        if self.use_proxy and "kimi-for-coding" in self.model and max_tokens < 1200:
+            max_tokens = 1200
             
         payload = {
             "model": self.model,
