@@ -43,7 +43,7 @@ class ModelRouterChatCompletionClient(ChatCompletionClient):
         self,
         messages: Sequence[SystemMessage | UserMessage | AssistantMessage],
         *,
-        tools: Sequence[Any] = []
+        tools: Sequence[Any] = [],
         json_output: bool | None = None,
         extra_create_args: dict = {},
         cancellation_token: CancellationToken | None = None,
@@ -85,7 +85,7 @@ class ModelRouterChatCompletionClient(ChatCompletionClient):
         self,
         messages: Sequence[SystemMessage | UserMessage | AssistantMessage],
         *,
-        tools: Sequence[Any] = []
+        tools: Sequence[Any] = [],
         json_output: bool | None = None,
         extra_create_args: dict = {},
         cancellation_token: CancellationToken | None = None,
@@ -102,6 +102,7 @@ class ModelRouterChatCompletionClient(ChatCompletionClient):
     async def close(self) -> None:
         pass
 
+    @property
     def model_info(self) -> ModelInfo:
         return self._model_info
 

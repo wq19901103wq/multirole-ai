@@ -52,11 +52,14 @@ if Swagger is not None:
     })
 
 # ========== 初始化各层 ==========
-# 1. 注册 provider
-ProviderRegistry.register("kimi", KimiProvider)
+# 支持 DEMO_MODE：无需真实 API Key 即可测试完整交互流程
+if os.environ.get("MULTIROLE_DEMO_MODE"):
+    from examples.run_consensus_demo import DemoProvider
+    default_provider = DemoProvider()
+else:
+    ProviderRegistry.register("kimi", KimiProvider)
+    default_provider = ProviderRegistry.create("kimi")
 
-# 2. 模型路由层
-default_provider = ProviderRegistry.create("kimi")
 router = ModelRouter(default_provider=default_provider)
 
 # 3. Harness Engine
