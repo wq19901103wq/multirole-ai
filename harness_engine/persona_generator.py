@@ -69,10 +69,12 @@ class PersonaGenerator:
 思考者一|可以先从最明显的直觉判断切入
 思考者二|注意检验前面观点中可能存在的隐含假设
 """
+        # 注意：Kimi Code 模型默认启用 thinking 模式，
+        # max_tokens 太小会导致 content 为空（只够输出 thinking 过程）
         raw = router.chat(
             messages=[{"role": "user", "content": prompt}],
             system="你是一个善于设计开放式讨论的专家。",
-            max_tokens=200,
+            max_tokens=1000,  # 确保足够容纳 thinking + 正式回复
             temperature=0.5,
         )
 
