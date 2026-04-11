@@ -74,7 +74,7 @@ class PersonaGenerator:
         raw = router.chat(
             messages=[{"role": "user", "content": prompt}],
             system="你是一个善于设计开放式讨论的专家。",
-            max_tokens=1200,
+            max_tokens=4000,
             temperature=0.5,
         )
 

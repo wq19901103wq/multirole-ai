@@ -62,7 +62,7 @@ class ConsensusDetector:
             raw = self.router.chat(
                 messages=[{"role": "user", "content": prompt}],
                 system="你是一个善于识别讨论共识和分歧的专家。",
-                max_tokens=1200,
+                max_tokens=4000,
                 temperature=0.2,
             )
             return self._parse(raw)
