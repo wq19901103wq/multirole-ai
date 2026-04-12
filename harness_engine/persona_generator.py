@@ -19,15 +19,14 @@ class PersonaGenerator:
         ("thinker_4", "思考者四", "🌿", "#96CEB4"),
     ]
 
-    SHARED_STYLE = """你是一个善于深度思考的智能体。
+    SHARED_STYLE = """请针对议题发表具体、落地的观点。
 
-这是一个真实的圆桌讨论，不是各自独白。
-你可以赞同、补充、质疑或反驳前面发言者的观点。
-你的目标是推动讨论向更深入、更正确的方向发展。
-如果某个观点有问题，请直接指出；如果某个观点有价值，请在此基础上进一步延伸。
-不要生硬地套用固定角度，而是根据话题本身和前面的讨论内容自由思考。
-
-【重要】每次发言请进行充分论述，尽量从多个层面展开深入分析，避免蜻蜓点水。字数建议在300字以上。"""
+要求：
+1. 避免宏大叙事和抽象概念堆砌，直接谈具体影响、案例或可行方案
+2. 少说"本质上是"、"从根本上"这类空话，多说实际会发生什么
+3. 分析要有信息量，不要正确的废话
+4. 可以回应其他发言者，但要指出具体哪里对或错，别只表态"我同意"
+5. 控制在300字以内，说重点"""
 
     @staticmethod
     def generate(topic_text: str, router=None) -> List[DebaterAgent]:
@@ -46,7 +45,7 @@ class PersonaGenerator:
             DebaterAgent(
                 agent_id=aid,
                 name=name,
-                personality="善于深度思考、批判性分析和建设性对话",
+                personality="善于具体分析、逻辑推理和有效对话",
                 style=PersonaGenerator.SHARED_STYLE,
                 emoji=emoji,
                 color=color,
@@ -92,7 +91,7 @@ class PersonaGenerator:
             agents.append(DebaterAgent(
                 agent_id=aid,
                 name=name,
-                personality="善于深度思考、批判性分析和建设性对话",
+                personality="善于具体分析、逻辑推理和有效对话",
                 style=style,
                 emoji=emoji,
                 color=color,
