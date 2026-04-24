@@ -1,4 +1,3 @@
-import json
 import pickle
 from typing import Optional
 import redis

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 from core.message import Message
 from model_router.router import ModelRouter
 from core.topic import Topic

@@ -1,4 +1,3 @@
-from typing import Optional
 from model_router.router import ModelRouter
 
 

@@ -1,6 +1,6 @@
 import json
 import re
-from typing import List, Optional, Dict
+from typing import List, Dict
 from core.message import Message
 
 

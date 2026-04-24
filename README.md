@@ -4,6 +4,13 @@
 
 一个分层架构的多代理 AI 讨论系统，核心解决**多 bot 讨论离题（Topic Drift）**问题。
 
+> **📚 文档导航**
+> - [快速上手](docs/01-quickstart/AI_QUICKSTART.md) - 第一次使用从这里开始
+> - [架构设计](docs/02-architecture/ARCHITECTURE.md) - 系统架构详解
+> - [模块索引](docs/02-architecture/MODULE_INDEX.md) - 文件职责速查
+> - [API 定义](docs/02-architecture/API_SURFACE.md) - 接口文档
+> - [踩坑记录](docs/04-troubleshooting/LESSONS_LEARNED.md) - 避免重复踩坑
+
 ## 架构设计
 
 ```
@@ -86,8 +93,9 @@ multirole-ai/
 ├── benchmarks/               # 性能基准测试
 │   └── benchmark_engine.py
 ├── examples/                 # 示例脚本
-│   ├── run_debate.py
-│   └── run_real_debate.py   # 真实 LLM 端到端演示
+│   ├── run_debate.py         # 命令行示例（Mock 模式）
+│   ├── run_real_debate.py    # 真实 LLM 端到端演示
+│   └── run_consensus_demo.py # 共识讨论演示（无需 API Key）
 ├── .github/workflows/        # CI/CD
 │   └── ci.yml
 ├── Dockerfile                # Docker 构建
@@ -112,6 +120,8 @@ multirole-ai/
 | **OpenClaw 技能** | ✅ 完成 | 已注册为 OpenClaw 技能 `multirole-ai`，可直接调用 |
 | **飞书 API 端点** | ✅ 完成 | `/v1/feishu/discuss` + 独立 `feishu_server.py` 回调服务 |
 | **圆桌讨论模式** | ✅ 完成 | 4 个平等思考者自由对话，互相补充/质疑/反驳，无固定角度 |
+| **ReAct 模式** | ✅ 完成 | 所有 Agent 支持 Thought-Action-Observation 思考与搜索 |
+| **DuckDuckGo 搜索** | ✅ 完成 | 免费搜索集成，无需 API Key |
 | **Swagger 文档** | ✅ 完成 | `/apidocs/` 自动生成 OpenAPI 文档 |
 | **WebSocket 流式** | ✅ 完成 | `/v1/discuss/stream` 实时逐条推送讨论结果 |
 | **CI/CD** | ✅ 完成 | GitHub Actions 自动跑测试 + Redis |

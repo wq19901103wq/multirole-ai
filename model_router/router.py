@@ -30,3 +30,48 @@ class ModelRouter:
             temperature=temperature,
             **kwargs
         )
+    
+    def chat_with_tools(
+        self,
+        messages: List[Dict[str, str]],
+        system: str = "",
+        tools: List[Dict[str, Any]] = None,
+        max_tokens: int = 500,
+        temperature: float = 0.5,
+        provider: Optional[LLMProvider] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        支持 function calling 的对话
+        
+        Returns:
+            包含 content 和 tool_calls 的字典
+            {
+                "content": str | None,
+                "tool_calls": [{"id": ..., "function": {"name": ..., "arguments": ...}}]
+            }
+        """
+        p = provider or self.default_provider
+        if p is None:
+            raise RuntimeError("No LLM provider configured")
+        
+        # 检查 provider 是否支持 tools
+        if hasattr(p, 'chat_completion_with_tools'):
+            return p.chat_completion_with_tools(
+                messages=messages,
+                system=system,
+                tools=tools or [],
+                max_tokens=max_tokens,
+                temperature=temperature,
+                **kwargs
+            )
+        else:
+            # 降级为普通 chat，返回格式兼容的字典
+            content = p.chat_completion(
+                messages=messages,
+                system=system,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                **kwargs
+            )
+            return {"content": content, "tool_calls": []}

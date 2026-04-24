@@ -21,14 +21,18 @@ class TopicAnchor:
         self.topic = topic
 
     def inject_prompt(self, role_name: str, role_personality: str, role_style: str) -> str:
-        """为某个角色生成简洁的 system prompt，仅保留议题提示"""
-        return f"""你是{role_name}，{role_personality}。
-
-{role_style}
+        """生成带议题锚定的 system prompt"""
+        forbidden = "\n".join(f'- "{w}"' for w in self.FORBIDDEN_PREFIXES)
+        return f"""你是{role_name}。{role_personality}，风格{role_style}。
 
 讨论议题：{self.topic.text}
 
-请围绕上述议题发表你的观点。可以自由赞同、补充、质疑或反驳其他发言者的观点。"""
+【硬性约束】
+1. 每次发言必须直接回应上述议题，禁止跑题。
+2. 禁止使用的跑题高频词：
+{forbidden}
+3. 每次发言最后必须自评与核心议题的相关性：相关性：X/10
+4. 你可以赞同、补充、质疑或反驳前面发言者的观点。这是一个真实的讨论，不是各自独白。"""
 
     @staticmethod
     def extract_relevance(text: str) -> Optional[float]:
