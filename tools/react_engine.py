@@ -4,7 +4,8 @@ Agent 可以自主决定何时调用搜索工具
 """
 import re
 from typing import List, Dict, Optional
-from tools.search import SearchTool, get_free_search_tool
+from tools.search import SearchTool
+from tools.search_free import get_free_search_tool
 
 
 class ToolCallingEngine:

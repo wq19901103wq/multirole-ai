@@ -116,28 +116,14 @@ class SearchTool:
 
 # 全局搜索工具实例（懒加载）
 _search_tool: Optional[SearchTool] = None
-_free_search: Optional["FreeSearchTool"] = None
 
 
 def get_search_tool() -> Optional[SearchTool]:
-    """获取全局搜索工具实例"""
+    """获取全局搜索工具实例（付费方案：Tavily / Serper）"""
     global _search_tool
     if _search_tool is None:
-        # 尝试从环境变量自动配置（付费方案）
         if os.environ.get("TAVILY_API_KEY"):
             _search_tool = SearchTool(provider="tavily")
         elif os.environ.get("SERPER_API_KEY"):
             _search_tool = SearchTool(provider="serper")
     return _search_tool
-
-
-def get_free_search_tool():
-    """获取免费搜索工具实例（无需 API Key）"""
-    global _free_search
-    if _free_search is None:
-        try:
-            from tools.search_free import FreeSearchTool
-            _free_search = FreeSearchTool()
-        except ImportError:
-            return None
-    return _free_search

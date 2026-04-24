@@ -5,7 +5,6 @@ from core.message import Message, Role
 from model_router.router import ModelRouter
 from drift_guard.anchor import TopicAnchor
 from drift_guard.checkpoint import ModeratorCheckpoint
-from drift_guard.truncator import ContextTruncator
 from .group_chat import HarnessGroupChat
 from .agents.debater import DebaterAgent
 from .agents.moderator import ModeratorAgent
@@ -54,7 +53,6 @@ class HarnessEngine:
 
         anchor = TopicAnchor(topic)
         checkpoint = ModeratorCheckpoint(self.router)
-        truncator = ContextTruncator(max_history_turns=2)
         group_chat = HarnessGroupChat(self.router, anchor, checkpoint)
 
         prev_summary: Optional[str] = None

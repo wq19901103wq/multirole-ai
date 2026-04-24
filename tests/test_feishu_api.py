@@ -15,7 +15,7 @@ def client():
         yield c
 
 
-def test_feishu_discuss_endpoint(client, monkeypatch):
+def test_feishu_discuss_endpoint(client):
     from api.server import session_manager, router
     from tests.conftest import MockProvider
 

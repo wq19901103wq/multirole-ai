@@ -20,11 +20,9 @@ def run_autogen_round(
     """
     使用 AutoGen v0.7+ (autogen-agentchat) 实现受控轮次讨论。
     """
-    from autogen_agentchat.agents import AssistantAgent
     from autogen_agentchat.teams import SelectorGroupChat
     from autogen_agentchat.conditions import MaxMessageTermination
     from autogen_agentchat.messages import TextMessage
-    from autogen_core import AgentId, SingleThreadedAgentRuntime
     from harness_engine.autogen_client import ModelRouterChatCompletionClient
 
     model_client = ModelRouterChatCompletionClient(router)

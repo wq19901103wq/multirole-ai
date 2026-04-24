@@ -23,7 +23,7 @@ def client():
 
 
 @pytest.mark.skipif(not WS_AVAILABLE, reason="flask-sock not installed")
-def test_discuss_stream_websocket(monkeypatch):
+def test_discuss_stream_websocket():
     from api.server import session_manager, router
     from tests.conftest import MockProvider
 

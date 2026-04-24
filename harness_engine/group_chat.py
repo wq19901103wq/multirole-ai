@@ -7,6 +7,16 @@ from harness_engine.group_chat_manual import run_manual_round
 from harness_engine.group_chat_autogen import run_autogen_round
 
 
+# 延迟导入 AutoGen，避免未安装时崩溃
+_autogen_available = False
+try:
+    import autogen_agentchat  # noqa: F401
+    import autogen_core  # noqa: F401
+    _autogen_available = True
+except ImportError:
+    pass
+
+
 class HarnessGroupChat:
     """
     兼容层：
@@ -23,16 +33,6 @@ class HarnessGroupChat:
         self.router = router
         self.topic_anchor = topic_anchor
         self.checkpoint = checkpoint
-        self._autogen_available = False
-        self._try_import_autogen()
-
-    def _try_import_autogen(self):
-        try:
-            import autogen_agentchat
-            import autogen_core
-            self._autogen_available = True
-        except ImportError:
-            self._autogen_available = False
 
     def run_round(
         self,
@@ -45,8 +45,7 @@ class HarnessGroupChat:
         on_message=None,
         full_history: Optional[List[Message]] = None,
     ) -> List[Message]:
-        if self._autogen_available and not force_manual:
-            # AutoGen 模式不支持逐消息回调，先跑完再批量回调（如有需要）
+        if _autogen_available and not force_manual:
             msgs = run_autogen_round(
                 self.router,
                 self.topic_anchor,

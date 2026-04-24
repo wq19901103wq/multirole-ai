@@ -73,7 +73,7 @@ def test_session_manager_with_redis(redis_store):
     assert len(loaded.turn_results) == 1
 
 
-def test_api_with_redis_env(monkeypatch, redis_store):
+def test_api_with_redis_env(redis_store):
     """通过环境变量 MULTIROLE_REDIS_URL 启动 API 并使用 Redis。"""
     from api.server import app, session_manager as global_sm
 

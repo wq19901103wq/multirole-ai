@@ -22,7 +22,7 @@ def test_health_endpoint(client):
     assert data["status"] == "ok"
 
 
-def test_discuss_endpoint(client, monkeypatch):
+def test_discuss_endpoint(client):
     # 把默认 provider 换成 mock，避免调用真实 API
     from api.server import session_manager, router
     from tests.conftest import MockProvider

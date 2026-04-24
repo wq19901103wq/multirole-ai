@@ -35,10 +35,6 @@ def create_react_agent(
     )
 
 
-# 保持兼容性 - 别名
-create_debater_agent_with_tools = create_react_agent
-
-
 def create_moderator_agent(
     agent_id: str,
     name: str,
@@ -61,15 +57,3 @@ def create_moderator_agent(
     )
 
 
-def create_debater_agent_basic(
-    agent_id: str,
-    name: str,
-    system_prompt: str,
-    model_client
-):
-    """创建基础的辩论 Agent（无工具）"""
-    return AssistantAgent(
-        name=agent_id,
-        model_client=model_client,
-        system_message=system_prompt,
-    )
