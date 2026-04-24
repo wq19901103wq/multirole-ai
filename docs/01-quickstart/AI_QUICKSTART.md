@@ -35,7 +35,7 @@ Model Router (模型路由)
 | 组件 | 作用 |
 |------|------|
 | TopicAnchor | 强制 Agent 复述议题核心 |
-| RelevanceScorer | 评估发言相关性 (0-10) |
+| TopicAnchor.extract_relevance | 提取 Agent 自评相关性 (0-10) |
 | ContextTruncator | 截断历史，防止递归稀释 |
 | ModeratorCheckpoint | 每轮结束检查并纠正 |
 
@@ -110,19 +110,20 @@ curl -X POST http://127.0.0.1:8890/v1/discuss \
 ```
 用户请求 → WebAdapter → SessionManager → HarnessEngine
                                               ↓
+                              PersonaGenerator.generate()
+                                              ↓
                               HarnessGroupChat.run_round()
                                               ↓
                     ┌──────────────────────────────────────┐
                     ↓                                      ↓
-            TopicAnchor.inject_prompt()       RelevanceScorer.score()
+            TopicAnchor.inject_prompt()       TopicAnchor.extract_relevance()
                     ↓                                      ↓
-            DebaterAgent.generate()           ModeratorAgent.moderate()
-                    ↓                                      ↓
-            ContextTruncator.truncate()       ModeratorCheckpoint.check()
-                    ↓                                      ↓
-                              └──────────────────────────────────────┘
-                                              ↓
-                                    返回 TurnResult
+            run_manual_round()              ModeratorCheckpoint.check()
+         /  run_autogen_round()                            ↓
+                    ↓                              返回 moderator 摘要
+            逐 Agent 调用 router.chat()
+                    ↓
+            返回 TurnResult
 ```
 
 ---

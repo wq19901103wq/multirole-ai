@@ -79,6 +79,17 @@ def run_manual_round(
             max_tokens=4000,
             temperature=0.7,
         )
+        # 如果返回空内容或错误，重试一次（直接 LLM，跳过工具）
+        if not raw or raw.startswith("【错误:") or len(raw.strip()) < 20:
+            logger.warning(
+                f"[Round {round_num}] Agent {spec.name} 首次生成异常（长度={len(raw)}），重试..."
+            )
+            raw = router.chat(
+                messages=conversation,
+                system=system,
+                max_tokens=4000,
+                temperature=0.7,
+            )
         elapsed = time.time() - start_time
         logger.info(
             f"[Round {round_num}] Agent {spec.name} 生成完成，耗时 {elapsed:.2f}s，内容长度: {len(raw)}"

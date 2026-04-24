@@ -46,8 +46,8 @@ Multirole AI 采用**分层架构**，从上到下依次是：
 ├─────────────────────────────────────────────────────────────────┤
 │  DriftGuard (防漂移核心)                                        │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌───────────┐ │
-│  │TopicAnchor  │ │Relevance    │ │Context      │ │Moderator  │ │
-│  │(议题锚定)   │ │Scorer       │ │Truncator    │ │Checkpoint │ │
+│  │TopicAnchor  │ │TopicAnchor  │ │Context      │ │Moderator  │ │
+│  │(议题锚定)   │ │(相关性提取) │ │Truncator    │ │Checkpoint │ │
 │  └─────────────┘ └─────────────┘ └─────────────┘ └───────────┘ │
 ├─────────────────────────────────────────────────────────────────┤
 │  Model Router                                                   │
@@ -199,21 +199,16 @@ def run_round(
 - "从另一个角度"
 ```
 
-#### 4.2 RelevanceScorer (相关性评分)
+#### 4.2 相关性评分 (TopicAnchor.extract_relevance)
 
-**作用**：当 Agent 自评不可靠时，由独立 LLM 重新评分。
+**作用**：Agent 在发言中自评相关性，由 `TopicAnchor.extract_relevance()` 从响应中提取评分。
 
 **算法**：
 ```python
-def score(topic_text: str, response_text: str) -> float:
-    prompt = f"""
-    评估以下发言与话题的相关性：
-    话题：{topic}
-    发言：{response}
-    
-    请给出 0-10 的相关性评分，只返回数字。
-    """
-    return float(llm.generate(prompt))
+def extract_relevance(text: str) -> Optional[float]:
+    # 从 Agent 响应中提取自评的相关性分数
+    # 匹配模式: "相关性: 8/10" 或 "自评: 7"
+    ...
 ```
 
 #### 4.3 ContextTruncator (上下文截断)
@@ -344,19 +339,20 @@ class SlackAdapter(BaseAdapter):
 ### 添加新的 Provider
 
 ```python
-# 示例：添加 DeepSeek 模型支持（OpenAI 兼容 API）
+# 示例：添加新的模型支持（OpenAI 兼容 API）
+# 只需继承 OpenAICompatibleProvider，修改 base_url 和 model 即可
 from model_router.providers.base import OpenAICompatibleProvider
 
-class DeepSeekProvider(OpenAICompatibleProvider):
-    def __init__(self, api_key: str = None, base_url: str = "https://api.deepseek.com/v1",
-                 model: str = "deepseek-chat"):
-        self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY", "")
+class NewProvider(OpenAICompatibleProvider):
+    def __init__(self, api_key: str = None, base_url: str = "https://api.example.com/v1",
+                 model: str = "example-model"):
+        self.api_key = api_key or os.getenv("EXAMPLE_API_KEY", "")
         self.base_url = base_url.rstrip("/")
         self.model = model
 
     @property
     def name(self) -> str:
-        return f"deepseek/{self.model}"
+        return f"example/{self.model}"
 
     def chat_completion(self, messages, system = '', max_tokens = 500, temperature = 0.5, **kwargs):
         msgs = self._build_messages(messages, system)
@@ -366,8 +362,6 @@ class DeepSeekProvider(OpenAICompatibleProvider):
         if "choices" in result and len(result["choices"]) > 0:
             return result["choices"][0]["message"]["content"] or "【无内容】"
         return "【无响应】"
-
-ProviderRegistry.register("deepseek", DeepSeekProvider)
 ```
 
 ### 添加新的搜索工具

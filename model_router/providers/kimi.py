@@ -72,31 +72,36 @@ class KimiProvider(OpenAICompatibleProvider):
 
         headers = self._get_headers()
 
-        try:
-            logger.info(f"[KimiProvider] 发送请求到 {self.base_url}/v1/chat/completions")
-            logger.info(f"[KimiProvider] 消息数量: {len(full_messages)}")
+        for attempt in range(2):
+            try:
+                logger.info(f"[KimiProvider] 发送请求到 {self.base_url}/v1/chat/completions (尝试 {attempt + 1}/2)")
+                logger.info(f"[KimiProvider] 消息数量: {len(full_messages)}")
 
-            result = self._do_chat_request(
-                f"{self.base_url}/v1/chat/completions",
-                headers=headers,
-                payload=payload,
-            )
+                result = self._do_chat_request(
+                    f"{self.base_url}/v1/chat/completions",
+                    headers=headers,
+                    payload=payload,
+                )
 
-            logger.info(f"[KimiProvider] 响应状态码: 200")
+                logger.info(f"[KimiProvider] 响应状态码: 200")
 
-            if "choices" in result and len(result["choices"]) > 0:
-                content = result["choices"][0]["message"]["content"]
-                logger.info(f"[KimiProvider] 成功获取响应，长度: {len(content)}")
-                return content
-            elif "error" in result:
-                error_msg = result['error'].get('message', '未知错误')
-                logger.error(f"[KimiProvider] API 错误: {error_msg}")
-                return f"【API错误: {error_msg}】"
-            logger.warning(f"[KimiProvider] 无响应内容，完整响应: {result}")
-            return "【无响应】"
-        except Exception as e:
-            logger.error(f"[KimiProvider] 异常: {e}")
-            return f"【错误: {str(e)}】"
+                if "choices" in result and len(result["choices"]) > 0:
+                    content = result["choices"][0]["message"]["content"]
+                    logger.info(f"[KimiProvider] 成功获取响应，长度: {len(content)}")
+                    return content
+                elif "error" in result:
+                    error_msg = result['error'].get('message', '未知错误')
+                    logger.error(f"[KimiProvider] API 错误: {error_msg}")
+                    return f"【API错误: {error_msg}】"
+                logger.warning(f"[KimiProvider] 无响应内容，完整响应: {result}")
+                return "【无响应】"
+            except Exception as e:
+                logger.error(f"[KimiProvider] 异常 (尝试 {attempt + 1}/2): {e}")
+                if attempt == 0:
+                    import time
+                    time.sleep(2)
+                    continue
+                return f"【错误: {str(e)}】"
 
     def chat_completion_with_tools(
         self,

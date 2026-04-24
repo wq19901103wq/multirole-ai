@@ -73,17 +73,16 @@ class DuckDuckGoSearch(BaseSearchProvider):
         try:
             client = self._get_client()
             
-            # 添加随机延迟，避免被限流
-            time.sleep(random.uniform(0.5, 1.5))
+            # 短暂延迟避免被限流
+            time.sleep(random.uniform(0.1, 0.3))
             
             results = client.text(
                 query,
                 max_results=max_results,
-                region='wt-wt',  # 全球结果
+                region='wt-wt',
                 safesearch='moderate'
             )
             
-            # 格式化结果
             formatted = []
             for r in results:
                 formatted.append({

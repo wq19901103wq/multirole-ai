@@ -61,7 +61,7 @@ CRITICAL - 致命错误（需要立即处理）
 | 事件 | 级别 | 消息格式 |
 |------|------|----------|
 | 注入锚点 | DEBUG | `[TopicAnchor] 注入议题锚定到 {agent}` |
-| 相关性评分 | DEBUG | `[RelevanceScorer] {agent} 自评: {score}/10` |
+| 相关性评分 | DEBUG | `[TopicAnchor] {agent} 自评: {score}/10` |
 | 截断上下文 | DEBUG | `[ContextTruncator] Round {n} 截断上下文` |
 | 检测到漂移 | WARNING | `[ModeratorCheckpoint] 检测到话题漂移` |
 

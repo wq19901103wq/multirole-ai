@@ -32,7 +32,6 @@ multirole-ai/
 │   ├── __init__.py
 │   ├── anchor.py
 │   ├── checkpoint.py
-│   ├── scorer.py
 │   └── truncator.py
 ├── examples/
 │   ├── run_consensus_demo.py
@@ -112,7 +111,6 @@ multirole-ai/
 │   ├── __init__.py
 │   ├── anchor.py  [被 feishu.py, web.py, wechat.py, engine.py, group_chat.py, test_harness_engine.py 依赖]
 │   ├── checkpoint.py  [被 engine.py, group_chat.py, test_harness_engine.py 依赖]
-│   ├── scorer.py
 │   └── truncator.py  [被 engine.py 依赖]
 ├── examples/
 │   ├── run_consensus_demo.py  [被 server.py 依赖]
@@ -140,7 +138,7 @@ multirole-ai/
 │   │   ├── kimi.py  [被 server.py, run_debate.py, run_real_debate.py, vision.py 依赖]
 │   │   └── openai.py
 │   ├── registry.py  [被 server.py 依赖]
-│   └── router.py  [被 server.py, checkpoint.py, scorer.py, run_consensus_demo.py, run_debate.py, run_real_debate.py, autogen_client.py, engine.py, group_chat.py, conftest.py, test_redis_integration.py, vision.py 依赖]
+│   └── router.py  [被 server.py, checkpoint.py, run_consensus_demo.py, run_debate.py, run_real_debate.py, autogen_client.py, engine.py, group_chat.py, conftest.py, test_redis_integration.py, vision.py 依赖]
 ├── session/
 │   ├── __init__.py
 │   ├── manager.py  [被 server.py, test_redis_integration.py 依赖]
@@ -273,13 +271,6 @@ multirole-ai/
   - `from core.message import Message`
   - `from model_router.router import ModelRouter`
   - `from core.topic import Topic`
-
-#### drift_guard/scorer.py
-- **职责**: 相关性评分器
-- **类**: RelevanceScorer
-- **关键函数/方法**: __init__, score
-- **依赖模块**:
-  - `from model_router.router import ModelRouter`
 
 #### drift_guard/truncator.py
 - **职责**: 上下文截断器
@@ -641,7 +632,6 @@ multirole-ai/
 | ProviderRegistry | model_router/registry.py | 模型 provider 注册表，支持别名注册和创建 |
 | ReActEngine | tools/react_engine.py | ReAct (Reasoning + Acting) 推理引擎 |
 | RedisSessionStore | session/store_redis.py | Redis session 存储实现 |
-| RelevanceScorer | drift_guard/scorer.py | LLM-as-a-Judge 相关性评分器 |
 | Role | core/message.py | 消息角色枚举（USER/SYSTEM/ASSISTANT/MODERATOR） |
 | SearchTool | tools/search.py | 网页搜索工具，支持 Tavily/Serper 等 API |
 | SearchToolWrapper | tools/kimi_function_search.py | 给不支持 function calling 模型的简化搜索包装器 |
@@ -772,7 +762,6 @@ multirole-ai/
 | run_until_consensus_stream | harness_engine/engine.py | - |
 | save | session/store.py | - |
 | save | session/store_redis.py | - |
-| score | drift_guard/scorer.py | - |
 | search | tools/search.py | - |
 | search | tools/search_free.py | - |
 | search | tools/search_free.py | - |

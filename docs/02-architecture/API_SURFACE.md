@@ -428,17 +428,6 @@ class TopicAnchor:
         ...
 ```
 
-### RelevanceScorer
-
-```python
-class RelevanceScorer:
-    def __init__(self, router: ModelRouter)
-    
-    def score(self, topic_text: str, response_text: str) -> float
-        """评估响应与话题的相关性，返回 0-10 分数"""
-        ...
-```
-
 ### ContextTruncator
 
 ```python

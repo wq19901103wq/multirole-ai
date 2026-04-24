@@ -11,9 +11,9 @@
 | 修改 Agent 发言行为 | `harness_engine` | `autogen_agents.py` |
 | 修改 ReAct 提示词 | `harness_engine` | `autogen_agents.py` |
 | 修改搜索工具调用 | `tools` | `search_free.py`, `react_engine.py` |
-| 修改防漂移逻辑 | `drift_guard` | `anchor.py`, `scorer.py`, `truncator.py` |
+| 修改防漂移逻辑 | `drift_guard` | `anchor.py`, `truncator.py` |
 | 修改议题锚定 Prompt | `drift_guard` | `anchor.py` |
-| 修改相关性评分 | `drift_guard` | `scorer.py` |
+| 修改相关性评分 | `drift_guard` | `anchor.py` |
 | 修改上下文截断 | `drift_guard` | `truncator.py` |
 | 添加新模型支持 | `model_router/providers` | 新建 `xxx.py` |
 | 修改模型调用逻辑 | `model_router` | `router.py` |
@@ -83,7 +83,6 @@
 | 文件 | 职责 | 关键类 |
 |------|------|--------|
 | `anchor.py` | 议题锚定 | `TopicAnchor` |
-| `scorer.py` | 相关性评分 | `RelevanceScorer` |
 | `truncator.py` | 上下文截断 | `ContextTruncator` |
 | `checkpoint.py` | 对齐检查点 | `ModeratorCheckpoint` |
 
@@ -95,11 +94,11 @@ class TopicAnchor:
         ...
 ```
 
-**RelevanceScorer** (`scorer.py`):
+**TopicAnchor.extract_relevance** (`anchor.py`):
 ```python
-class RelevanceScorer:
-    def score(self, response: str, topic: str) -> float:
-        # 返回 0-10 的相关性评分
+class TopicAnchor:
+    def extract_relevance(self, text: str) -> Optional[float]:
+        # 从 Agent 响应中提取自评的相关性评分
         ...
 ```
 
